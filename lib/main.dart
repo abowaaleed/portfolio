@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/auth_provider.dart';
 import 'theme/app_theme.dart';
+import 'services/firebase_service.dart';
+import 'services/firestore_service.dart';
 import 'widgets/nav_bar.dart';
 import 'widgets/hero_section.dart';
 import 'widgets/apps_section.dart';
@@ -12,11 +15,17 @@ import 'widgets/blog_section.dart';
 import 'widgets/social_section.dart';
 import 'widgets/feedback_section.dart';
 import 'widgets/footer.dart';
+import 'admin/admin_dashboard.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await FirebaseService.init();
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
       child: const PortfolioApp(),
     ),
   );
@@ -36,6 +45,9 @@ class PortfolioApp extends StatelessWidget {
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.themeMode,
           home: const PortfolioPage(),
+          routes: {
+            '/admin': (_) => const AdminDashboard(),
+          },
         );
       },
     );
@@ -53,15 +65,15 @@ class _PortfolioPageState extends State<PortfolioPage> {
   final _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    FirestoreService.trackPageView();
+  }
+
+  @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onSectionTap(int index) {
-    final offsets = [0.0, 600.0, 1300.0, 1900.0, 2400.0, 3100.0];
-    final target = index < offsets.length ? offsets[index] : 3100.0;
-    _scrollController.animateTo(target, duration: const Duration(milliseconds: 600), curve: Curves.easeInOut);
   }
 
   @override
@@ -92,10 +104,15 @@ class _PortfolioPageState extends State<PortfolioPage> {
               top: 0,
               left: 0,
               right: 0,
-              child: NavBar(onSectionTap: _onSectionTap, scrollController: _scrollController),
+              child: NavBar(scrollController: _scrollController),
             ),
           ],
         ),
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        onPressed: () => Navigator.pushNamed(context, '/admin'),
+        backgroundColor: AppColors.accentPurple,
+        child: const Icon(Icons.admin_panel_settings, color: Colors.white),
       ),
     );
   }
