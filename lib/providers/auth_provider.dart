@@ -2,29 +2,39 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthProvider extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   User? _user;
   bool _loading = true;
+  bool _initialized = false;
 
   User? get user => _user;
   bool get isLoggedIn => _user != null;
   bool get loading => _loading;
+  bool get initialized => _initialized;
+
   bool get isAdmin {
     return _user != null && _user!.email == 'abo.waaleed@gmail.com';
   }
 
   AuthProvider() {
-    _auth.authStateChanges().listen((user) {
-      _user = user;
+    try {
+      FirebaseAuth.instance.authStateChanges().listen((user) {
+        _user = user;
+        _loading = false;
+        _initialized = true;
+        notifyListeners();
+      });
+    } catch (e) {
       _loading = false;
+      _initialized = false;
+      debugPrint('Auth init failed: $e');
       notifyListeners();
-    });
+    }
   }
 
   Future<String?> signInWithGoogle() async {
     try {
       final provider = GoogleAuthProvider();
-      final result = await _auth.signInWithPopup(provider);
+      final result = await FirebaseAuth.instance.signInWithPopup(provider);
       _user = result.user;
       notifyListeners();
       return null;
@@ -36,7 +46,9 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    await _auth.signOut();
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
     _user = null;
     notifyListeners();
   }

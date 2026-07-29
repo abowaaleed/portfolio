@@ -17,9 +17,9 @@ import 'widgets/feedback_section.dart';
 import 'widgets/footer.dart';
 import 'admin/admin_dashboard.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await FirebaseService.init();
+  FirebaseService.init().catchError((_) {});
   runApp(
     MultiProvider(
       providers: [
@@ -67,7 +67,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
   @override
   void initState() {
     super.initState();
-    FirestoreService.trackPageView();
+    FirestoreService.trackPageView().catchError((_) {});
   }
 
   @override

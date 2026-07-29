@@ -4,11 +4,16 @@ import '../models/blog_post.dart';
 import '../models/news_item.dart';
 import '../models/tutorial.dart';
 import '../models/feedback_item.dart';
-import '../models/social_link.dart';
+
+FirebaseFirestore get _db {
+  try {
+    return FirebaseFirestore.instance;
+  } catch (_) {
+    throw Exception('Firestore not initialized');
+  }
+}
 
 class FirestoreService {
-  static final _db = FirebaseFirestore.instance;
-
   static Future<List<AppItem>> getApps() async {
     final snap = await _db.collection('apps').orderBy('isPinned', descending: true).get();
     return snap.docs.map((d) => AppItem.fromMap({...d.data(), 'id': d.id})).toList();
@@ -152,18 +157,24 @@ class FirestoreService {
   }
 
   static Future<void> trackPageView() async {
-    final today = DateTime.now();
-    final dayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
-    final ref = _db.collection('analytics').doc(dayStr);
-    await ref.set({'views': FieldValue.increment(1), 'date': today}, SetOptions(merge: true));
+    try {
+      final today = DateTime.now();
+      final dayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final ref = _db.collection('analytics').doc(dayStr);
+      await ref.set({'views': FieldValue.increment(1), 'date': today}, SetOptions(merge: true));
+    } catch (_) {}
   }
 
   static Future<Map<String, int>> getAnalytics() async {
-    final snap = await _db.collection('analytics').orderBy('date', descending: true).limit(30).get();
-    int total = 0;
-    for (final d in snap.docs) {
-      total += (d.data()['views'] as num?)?.toInt() ?? 0;
+    try {
+      final snap = await _db.collection('analytics').orderBy('date', descending: true).limit(30).get();
+      int total = 0;
+      for (final d in snap.docs) {
+        total += (d.data()['views'] as num?)?.toInt() ?? 0;
+      }
+      return {'totalViews': total, 'daysCount': snap.docs.length};
+    } catch (_) {
+      return {'totalViews': 0, 'daysCount': 0};
     }
-    return {'totalViews': total, 'daysCount': snap.docs.length};
   }
 }
