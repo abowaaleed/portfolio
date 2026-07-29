@@ -4,12 +4,12 @@ class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform => web;
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-    appId: '1:123456789:web:aaaaaaaaaaaaaaaaaaaaaa',
-    messagingSenderId: '123456789',
-    projectId: 'YOUR_FIREBASE_PROJECT_ID',
-    authDomain: 'YOUR_PROJECT.firebaseapp.com',
-    storageBucket: 'YOUR_PROJECT.appspot.com',
-    measurementId: 'G-XXXXXXXXXX',
+    apiKey: 'AIzaSyDQy3w4a8luM2g5vFVQ6ggoe3a1nmp2PGs',
+    appId: '1:150947006478:web:01b49dda172eb10946d45f',
+    messagingSenderId: '150947006478',
+    projectId: 'saleh-portfolio-ef926',
+    authDomain: 'saleh-portfolio-ef926.firebaseapp.com',
+    storageBucket: 'saleh-portfolio-ef926.firebasestorage.app',
+    measurementId: 'G-S59ML9TRTM',
   );
 }
