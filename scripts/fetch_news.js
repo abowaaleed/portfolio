@@ -231,8 +231,27 @@ async function summarizeBatch(items, feedName) {
 الأخبار:
 ${input}`;
 
+  async function generateWithRetry(promptText, attempts = 3) {
+    let lastErr;
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        return await model.generateContent(promptText);
+      } catch (e) {
+        lastErr = e;
+        const msg = String(e.message || '');
+        const retryable = /(429|408|500|502|503|504|quota|rate.?limit|RESOURCE_EXHAUSTED|UNAVAILABLE)/i.test(msg);
+        if (!retryable || i === attempts) throw e;
+        const m = msg.match(/retry in ([0-9.]+)s/i);
+        const delay = m ? Math.ceil(parseFloat(m[1]) * 1000) + 1500 : (i === 1 ? 20000 : 40000);
+        log(`خطأ Gemini مؤقت (محاولة ${i}/${attempts}): ${msg.slice(0, 140)} — إعادة المحاولة بعد ${Math.round(delay / 1000)} ثانية.`);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw lastErr;
+  }
+
   async function generateOnce(p) {
-    const result = await model.generateContent(p);
+    const result = await generateWithRetry(p);
     return extractJsonBlock(result.response.text());
   }
 
@@ -309,10 +328,10 @@ function buildDoc(it, preview = false) {
   return base;
 }
 
-async function isDuplicate(link) {
-  if (dryRun) return false;
+async function findExisting(link) {
+  if (dryRun) return null;
   const snap = await db.collection('news').where('link', '==', link).limit(1).get();
-  return !snap.empty;
+  return snap.empty ? null : snap.docs[0];
 }
 
 async function saveItem(it) {
@@ -362,7 +381,7 @@ async function main() {
     log(`Firestore جاهز على مشروع: ${sa.project_id || 'غير معروف'}`);
   }
 
-  const fresh = [];
+  const allItems = [];
   for (const feed of FEEDS) {
     try {
       const items = await fetchFeed(feed);
@@ -371,36 +390,48 @@ async function main() {
         continue;
       }
       log(`${feed.name}: تم جلب ${items.length} عنصراً.`);
-      const top = items.slice(0, maxItemsPerFeed);
-
-      let summarized = top;
-      if (GEMINI_API_KEY) {
-        try {
-          summarized = await summarizeBatch(top, feed.name);
-        } catch (e) {
-          log(`تحذير: فشل تلخيص ${feed.name}: ${e.message} — سيُستخدم البديل العربي.`);
-          summarized = top.map(arabicFallback);
-        }
-      } else {
-        summarized = top.map(arabicFallback);
-      }
-
-      for (const it of summarized) {
-        if (await isDuplicate(it.link)) {
-          log(`تخطي (مكرر): ${it.link}`);
-          continue;
-        }
-        if (fetchImages && it.imageUrl) {
-          it.imageBase64 = await imageToBase64(it.imageUrl);
-        }
-        fresh.push(it);
-      }
+      allItems.push(...items.slice(0, maxItemsPerFeed));
     } catch (e) {
       log(`خطأ في المصدر ${feed.name}: ${e.message}`);
     }
   }
 
-  if (!fresh.length) {
+  let summarized = allItems;
+  if (allItems.length) {
+    if (GEMINI_API_KEY) {
+      try {
+        summarized = await summarizeBatch(allItems, 'جميع المصادر');
+      } catch (e) {
+        log(`تحذير: فشل تلخيص Gemini: ${e.message} — سيُستخدم البديل (العناوين الأصلية).`);
+        summarized = allItems.map(arabicFallback);
+      }
+    } else {
+      log('تنبيه: GEMINI_API_KEY غير مضبوط — سيتم استخدام العناوين الأصلية دون ترجمة.');
+      summarized = allItems.map(arabicFallback);
+    }
+  }
+
+  const fresh = [];
+  const pendingUpdate = [];
+  for (const it of summarized) {
+    const existing = await findExisting(it.link);
+    if (existing) {
+      const oldTitle = String(existing.data().title || '');
+      const newTitle = String(it.title || '');
+      if (hasArabic(newTitle) && !hasArabic(oldTitle)) {
+        pendingUpdate.push({ it, existing });
+      } else {
+        log(`تخطي (مكرر): ${it.link}`);
+      }
+      continue;
+    }
+    if (fetchImages && it.imageUrl) {
+      it.imageBase64 = await imageToBase64(it.imageUrl);
+    }
+    fresh.push(it);
+  }
+
+  if (!fresh.length && !pendingUpdate.length) {
     log('لا توجد أخبار جديدة للحفظ.');
     return;
   }
@@ -416,7 +447,20 @@ async function main() {
       log(`فشل حفظ: ${it.link}: ${e.message}`);
     }
   }
-  log(`تمت معالجة ${fresh.length} خبراً جديداً، الحفظ الناجح: ${savedCount}.`);
+
+  let updatedCount = 0;
+  for (const { it, existing } of pendingUpdate) {
+    try {
+      const doc = buildDoc(it);
+      await existing.ref.set(doc, { merge: true });
+      updatedCount++;
+      savedLinks.add(it.link);
+      log(`تم تحديث ترجمة عربية بدلاً من الإنجليزية: ${String(doc.title).slice(0, 60)}`);
+    } catch (e) {
+      log(`فشل تحديث: ${it.link}: ${e.message}`);
+    }
+  }
+  log(`تمت معالجة ${fresh.length} خبراً جديداً (الحفظ الناجح: ${savedCount}) وتحديث ${updatedCount} ترجمة عربية.`);
 
   if (!dryRun) {
     const cleaned = await cleanEnglishNews(savedLinks);
