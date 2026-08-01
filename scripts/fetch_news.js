@@ -13,11 +13,12 @@
 import admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { XMLParser } from 'fast-xml-parser';
+import { pathToFileURL } from 'node:url';
 
 const {
   GEMINI_API_KEY,
   FIREBASE_SERVICE_ACCOUNT,
-  GEMINI_MODEL = 'gemini-1.5-flash',
+  GEMINI_MODEL = 'gemini-2.0-flash',
   MAX_ITEMS_PER_FEED = '5',
   FETCH_IMAGES = 'true',
   DRY_RUN = 'false',
@@ -245,13 +246,14 @@ function toTimestamp(d) {
 }
 
 function buildDoc(it, preview = false) {
+  const fallbackContent = stripHtml(it.description || '').slice(0, 300) || it.title || '';
   const base = {
-    title: it.title,
-    content: it.content,
-    description: it.content,
-    source: it.source,
-    category: it.category,
-    link: it.link,
+    title: it.title || '',
+    content: it.content || fallbackContent,
+    description: it.content || fallbackContent,
+    source: it.source || '',
+    category: it.category || 'تقنية عامة',
+    link: it.link || '',
     publishedAt: it.pubDate || null,
     createdAt: preview ? new Date().toISOString() : admin.firestore.Timestamp.now(),
   };
@@ -292,6 +294,7 @@ async function main() {
     const sa = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
     admin.initializeApp({ credential: admin.credential.cert(sa) });
     db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
     log(`Firestore جاهز على مشروع: ${sa.project_id || 'غير معروف'}`);
   }
 
@@ -312,11 +315,15 @@ async function main() {
           summarized = await summarizeBatch(top, feed.name);
         } catch (e) {
           log(`تحذير: فشل تلخيص ${feed.name}: ${e.message} — سيُستخدم النص الأصلي.`);
+          summarized = top.map((it) => ({
+            ...it,
+            content: it.description.slice(0, 300) || it.title,
+            category: 'تقنية عامة',
+          }));
         }
       } else {
-        summarized = summarized.map((it) => ({
+        summarized = top.map((it) => ({
           ...it,
-          title: it.title,
           content: it.description.slice(0, 300) || it.title,
           category: 'تقنية عامة',
         }));
@@ -354,7 +361,12 @@ async function main() {
   log(`تمت معالجة ${fresh.length} خبراً جديداً، الحفظ الناجح: ${savedCount}.`);
 }
 
-main().then(() => process.exit(0)).catch((e) => {
-  console.error('[FATAL]', e);
-  process.exit(1);
-});
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().then(() => process.exit(0)).catch((e) => {
+    console.error('[FATAL]', e);
+    process.exit(1);
+  });
+}
+
+export { buildDoc, toTimestamp, stripHtml, decodeEntities, normalizeItem, CATEGORIES };
