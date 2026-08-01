@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+class AppInfo {
+  static const version = 'v1.3.0';
+}
+
 class AppColors {
   static const darkBg = Color(0xFF0A0A0F);
   static const darkCard = Color(0xFF1A1A2E);

@@ -1,4 +1,4 @@
-name: Daily Tech News Fetcher
+name: Daily News & Trends Fetcher
 
 on:
   # يومياً الساعة 04:00 UTC = 07:00 صباحاً بتوقيت السعودية (UTC+3)
@@ -8,7 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       wipe:
-        description: 'مسح مجموعة الأخبار الحالية قبل التشغيل'
+        description: 'مسح مجموعات الأخبار قبل التشغيل'
+        type: boolean
+        default: false
+      tweet:
+        description: 'نشر تغريدة اليوم على X بعد الجلب'
         type: boolean
         default: false
 
@@ -21,7 +25,7 @@ concurrency:
 
 jobs:
   fetch-news:
-    name: جلب الأخبار وتلخيصها وتخزينها
+    name: جلب الأخبار والترندات وتلخيصها وتخزينها
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,11 +43,26 @@ jobs:
         working-directory: scripts
         run: npm ci
 
-      - name: تشغيل جالب الأخبار
+      - name: تشغيل جالب الأخبار والترندات
         working-directory: scripts
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          REFRESH_EXISTING: 'true'
           WIPE_FIRST: ${{ inputs.wipe }}
-        run: node fetch_news.js
+          MAX_ITEMS_PER_FEED: '8'
+          MAX_PUBLISHED: '8'
+          FETCH_IMAGES: 'true'
+        run: node fetch_all.js
+
+      - name: نشر تغريدة اليوم على X
+        working-directory: scripts
+        if: ${{ github.event_name == 'schedule' || inputs.tweet == true }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+          X_PROFILE_URL: ${{ vars.X_PROFILE_URL }}
+        run: node post_tweet.js

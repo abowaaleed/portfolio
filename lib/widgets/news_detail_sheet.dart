@@ -26,8 +26,11 @@ class NewsDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final imgBase64 = data['imageBase64'] as String?;
     final imgUrl = data['imageUrl'] as String?;
-    final content = (data['content'] as String? ?? data['description'] as String? ?? '').trim();
+    final content = (data['summary'] as String? ?? data['content'] as String? ?? data['description'] as String? ?? '').trim();
     final sourceUrl = (data['url'] as String? ?? data['link'] as String? ?? '').trim();
+    final category = (data['category'] as String? ?? '').trim();
+    final traffic = (data['approxTraffic'] as String? ?? '').trim();
+    final reason = (data['reason'] as String? ?? '').trim();
     final hasImage = (imgBase64 != null && imgBase64.isNotEmpty) || (imgUrl != null && imgUrl.isNotEmpty);
 
     return DraggableScrollableSheet(
@@ -62,7 +65,30 @@ class NewsDetailSheet extends StatelessWidget {
             Row(children: [
               Icon(Icons.newspaper, size: 18, color: AppColors.accent),
               const SizedBox(width: 6),
-              Text('خبر', style: TextStyle(fontSize: 12, color: AppColors.accent)),
+              Expanded(
+                child: Text(
+                  category.isNotEmpty ? category : 'خبر',
+                  style: TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (traffic.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentPurple.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_fire_department, size: 12, color: AppColors.accentPurple),
+                      const SizedBox(width: 4),
+                      Text(traffic, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.accentPurple)),
+                    ],
+                  ),
+                ),
             ]),
             const SizedBox(height: 8),
             Text(
@@ -83,6 +109,30 @@ class NewsDetailSheet extends StatelessWidget {
               Text(
                 content,
                 style: TextStyle(fontSize: 14, height: 1.8, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+              ),
+            ],
+            if (reason.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: isDark ? 0.12 : 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.trending_up, size: 16, color: AppColors.accent),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        reason,
+                        style: TextStyle(fontSize: 12, height: 1.6, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
             const SizedBox(height: 24),

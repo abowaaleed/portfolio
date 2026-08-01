@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
+import '../services/firestore_service.dart';
 
 class FeedbackSection extends StatefulWidget {
   const FeedbackSection({super.key});
@@ -11,8 +13,8 @@ class FeedbackSection extends StatefulWidget {
 class _FeedbackSectionState extends State<FeedbackSection> {
   final _nameCtrl = TextEditingController();
   final _commentCtrl = TextEditingController();
-  double _rating = 5;
   String? _reaction;
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -21,77 +23,104 @@ class _FeedbackSectionState extends State<FeedbackSection> {
     super.dispose();
   }
 
+  Future<void> _submit() async {
+    if (_commentCtrl.text.trim().isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await FirebaseFirestore.instance.collection('feedback').add({
+        'name': _nameCtrl.text.trim().isEmpty ? 'زائر' : _nameCtrl.text.trim(),
+        'comment': _commentCtrl.text.trim(),
+        'rating': 5,
+        'reaction': _reaction,
+        'date': DateTime.now(),
+        'approved': false,
+      });
+      _nameCtrl.clear();
+      _commentCtrl.clear();
+      setState(() => _reaction = null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('شكرًا لمشاركتك!'), duration: Duration(seconds: 2)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('حدث خطأ، حاول مرة أخرى')));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _SectionHeader(title: 'رأيك يهمني', subtitle: 'شاركني باقتراح أو تعليق'),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           Card(
+            margin: EdgeInsets.zero,
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ما رأيك في الصفحة؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
-                  const SizedBox(height: 16),
+                  Text('ما رأيك في الموقع؟', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: _nameCtrl,
                     decoration: InputDecoration(
                       hintText: 'اسمك (اختياري)',
                       filled: true,
                       fillColor: isDark ? AppColors.darkBg : const Color(0xFFF1F5F9),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
+                    style: const TextStyle(fontSize: 13),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _commentCtrl,
-                    maxLines: 3,
+                    maxLines: 2,
                     decoration: InputDecoration(
-                      hintText: 'اكتب رأيك أو اقتراحك...',
+                      hintText: 'اكتب رأيك...',
                       filled: true,
                       fillColor: isDark ? AppColors.darkBg : const Color(0xFFF1F5F9),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
+                    style: const TextStyle(fontSize: 13),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       ...['👍', '😍', '🤔', '🔥'].map((e) => Padding(
-                        padding: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.only(left: 6),
                         child: ChoiceChip(
-                          label: Text(e, style: const TextStyle(fontSize: 20)),
+                          label: Text(e, style: const TextStyle(fontSize: 18)),
                           selected: _reaction == e,
                           onSelected: (v) => setState(() => _reaction = v ? e : null),
                           selectedColor: AppColors.accent.withValues(alpha: 0.2),
+                          visualDensity: VisualDensity.compact,
                         ),
                       )),
                       const Spacer(),
                       ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('شكرًا لمشاركتك! سيتم مراجعة تعليقك قبل النشر.')),
-                          );
-                          _nameCtrl.clear();
-                          _commentCtrl.clear();
-                        },
+                        onPressed: _sending ? null : _submit,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.accent,
                           foregroundColor: Colors.black,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         ),
-                        child: const Text('إرسال'),
+                        child: _sending
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                            : const Text('إرسال', style: TextStyle(fontSize: 13)),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text('سيتم مراجعة تعليقك قبل النشر', style: TextStyle(fontSize: 11, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
                 ],
               ),
             ),
@@ -105,7 +134,6 @@ class _FeedbackSectionState extends State<FeedbackSection> {
 class _SectionHeader extends StatelessWidget {
   final String title;
   final String subtitle;
-
   const _SectionHeader({required this.title, required this.subtitle});
 
   @override
@@ -114,11 +142,11 @@ class _SectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: TextStyle(fontSize: 14, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
-        const SizedBox(height: 16),
-        Container(width: 60, height: 3, decoration: BoxDecoration(
+        Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+        const SizedBox(height: 2),
+        Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        const SizedBox(height: 10),
+        Container(width: 50, height: 3, decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(2),
           gradient: const LinearGradient(colors: [AppColors.accentPink, AppColors.accentPurple]),
         )),

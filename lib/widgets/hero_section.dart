@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 
 class HeroSection extends StatelessWidget {
@@ -10,71 +12,63 @@ class HeroSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      height: size.height * 0.7,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: CustomPaint(painter: _GridPainter(isDark: isDark)),
-          ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.accent, width: 2),
-                  ),
-                  child: CircleAvatar(
-                    radius: 48,
-                    backgroundColor: AppColors.darkCard,
-                    child: Text('S', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.accent, fontFamily: 'monospace')),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text('صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 48 : 36, fontWeight: FontWeight.w900, color: isDark ? Colors.white : AppColors.lightTextPrimary, height: 1.2)),
-                const SizedBox(height: 8),
-                Text('Saleh Alhoodi', style: TextStyle(fontSize: size.width > 600 ? 24 : 18, color: AppColors.accent, fontFamily: 'monospace', letterSpacing: 2)),
-                const SizedBox(height: 16),
-                Text(
-                  'مطوّر تطبيقات وأنظمة • شغوف بالتقنية والتراث السعودي وتطبيقات الحياة اليومية',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: size.width > 600 ? 16 : 14, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary, height: 1.6),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'أُحوِّل الأفكار إلى تطبيقات تُسهِّل الحياة',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: size.width > 600 ? 14 : 12, color: AppColors.accentPurple, fontFamily: 'monospace'),
-                ),
-                const SizedBox(height: 32),
-                Row(
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('settings').doc('profile').snapshots(),
+      builder: (ctx, snap) {
+        final data = snap.data?.data() as Map<String, dynamic>?;
+        final profImg = data?['profileImageBase64'] as String?;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          height: size.height * 0.55,
+          child: Stack(
+            children: [
+              Positioned.fill(child: CustomPaint(painter: _GridPainter(isDark: isDark))),
+              Center(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _HeroButton(
-                      label: 'استعرض تطبيقاتي',
-                      icon: Icons.apps,
-                      onTap: () => scrollController.animateTo(600, duration: const Duration(milliseconds: 600), curve: Curves.easeInOut),
-                      isPrimary: true,
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.accent, width: 2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: AppColors.darkCard,
+                        backgroundImage: profImg != null ? MemoryImage(base64Decode(profImg.split(',').last)) : null,
+                        child: profImg == null ? Text('S', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.accent, fontFamily: 'monospace')) : null,
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    _HeroButton(
-                      label: 'تواصل معي',
-                      icon: Icons.chat_bubble_outline,
-                      onTap: () => scrollController.animateTo(3100, duration: const Duration(milliseconds: 600), curve: Curves.easeInOut),
-                      isPrimary: false,
+                    const SizedBox(height: 16),
+                    Text('صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 40 : 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : AppColors.lightTextPrimary, height: 1.2)),
+                    const SizedBox(height: 4),
+                    Text('Saleh Alhoodi — موقع صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 18 : 13, color: AppColors.accent, fontFamily: 'monospace', letterSpacing: 1)),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Text(
+                        'مطوّر تطبيقات وأنظمة • شغوف بالتقنية والتراث السعودي',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: size.width > 600 ? 14 : 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary, height: 1.4),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _HeroButton(label: 'تطبيقاتي', icon: Icons.apps, onTap: () => scrollController.animateTo(500, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: true),
+                        const SizedBox(width: 12),
+                        _HeroButton(label: 'تواصل', icon: Icons.chat_bubble_outline, onTap: () => scrollController.animateTo(2100, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: false),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -92,13 +86,13 @@ class _HeroButton extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ElevatedButton.icon(
       onPressed: onTap,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontSize: 13)),
       style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         backgroundColor: isPrimary ? AppColors.accent : (isDark ? AppColors.darkCard : const Color(0xFFE2E8F0)),
         foregroundColor: isPrimary ? Colors.black : (isDark ? Colors.white : AppColors.lightTextPrimary),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         side: isPrimary ? BorderSide.none : BorderSide(color: isDark ? const Color(0xFF2A2A3E) : const Color(0xFFCBD5E1)),
       ),
     );
@@ -107,7 +101,6 @@ class _HeroButton extends StatelessWidget {
 
 class _GridPainter extends CustomPainter {
   final bool isDark;
-
   _GridPainter({required this.isDark});
 
   @override

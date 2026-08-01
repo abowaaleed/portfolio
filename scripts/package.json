@@ -1,12 +1,13 @@
 {
   "name": "portfolio-news-fetcher",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "يجلب أخبار التقنية من خلاصات RSS ويلخصها ويترجمها عبر Google Gemini ويخزنها في Firebase Firestore",
-  "main": "fetch_news.js",
+  "description": "منظومة أتمتة: جلب أخبار التقنية والترندات السعودية والعالمية، تحرير ذكي عبر Gemini، تخزين منظم في Firestore، ونشر تلقائي على X",
+  "main": "fetch_all.js",
   "scripts": {
-    "start": "node fetch_news.js"
+    "start": "node fetch_all.js",
+    "tweet": "node post_tweet.js"
   },
   "engines": {
     "node": ">=18"
@@ -15,6 +16,7 @@
     "@google-cloud/firestore": "^7.7.0",
     "@google/generative-ai": "^0.24.1",
     "fast-xml-parser": "^4.5.0",
-    "firebase-admin": "^12.7.0"
+    "firebase-admin": "^12.7.0",
+    "twitter-api-v2": "^1.19.0"
   }
 }
