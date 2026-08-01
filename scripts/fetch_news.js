@@ -125,11 +125,17 @@ function pickValue(obj) {
   return null;
 }
 
+function extractFirstImg(raw) {
+  const content = textOf(raw['content:encoded']) || textOf(raw.description) || textOf(raw.content) || '';
+  const match = String(content).match(/<img[^>]+src=["']([^"']+)["']/i);
+  return match ? match[1] : null;
+}
+
 function extractImage(item) {
   const m = item['media:content']?.[0] ?? item['media:content'];
   const t = item['media:thumbnail']?.[0] ?? item['media:thumbnail'];
   const e = item.enclosure;
-  return pickValue(m) || pickValue(t) || (e && pickValue(e));
+  return pickValue(m) || pickValue(t) || (e && pickValue(e)) || extractFirstImg(item);
 }
 
 function normalizeItem(raw, source) {
@@ -165,6 +171,26 @@ function stripHtml(html) {
     .trim());
 }
 
+function hasArabic(text) {
+  return /[\u0600-\u06FF]/.test(String(text || ''));
+}
+
+function arabicFallback(it) {
+  const enriched = { ...it };
+  const rawContent = stripHtml(it.description || '').slice(0, 300) || it.title || '';
+  if (hasArabic(rawContent) || hasArabic(it.title || '')) {
+    enriched.title = it.title || '';
+    enriched.content = rawContent;
+  } else {
+    const source = it.source || 'المواقع التقنية';
+    enriched.originalTitle = it.title || '';
+    enriched.title = `خبر تقني جديد من ${source}`;
+    enriched.content = `إليك أحدث خبر تقني من ${source}. للاطلاع على التفاصيل الكاملة والمصدر الأصلي، اضغط على البطاقة للقراءة.`;
+  }
+  enriched.category = it.category || 'تقنية عامة';
+  return enriched;
+}
+
 function extractJsonBlock(text) {
   const start = text.indexOf('[');
   const end = text.lastIndexOf(']');
@@ -192,35 +218,53 @@ async function summarizeBatch(items, feedName) {
     .map((it, i) => JSON.stringify({ id: i, title: it.title, description: it.description, pubDate: it.pubDate }))
     .join('\n');
 
-  const prompt = `أنت محرر أخبار تقنية عربي. أعِد صياغة الأخبار التالية وترجمتها إلى العربية.
-القواعد:
-- لكل خبر: عنوان عربي جذاب ومختصر (لا يتجاوز 80 حرفاً)، وملخص مركز في 3 أسطر فقط (افصل بين الأسطر بعلامة \n).
-- إذا كان النص عربياً أصلاً فأعِد صياغته بالعربية الفصحى، وإن كان إنجليزياً فترجمه ترجمة احترافية.
-- حدد تصنيفاً واحداً لكل خبر من القائمة حصراً: ${CATEGORIES.join('، ')}
-- أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس معرف id، بصيغة:
+  const prompt = `أنت محرر أخبار تقنية محترف باللغة العربية. مهمتك ترجمة وصياغة الأخبار التالية إلى العربية الفصحى الواضحة والجذابة.
+قواعد صارمة:
+1. كل المخرجات (العنوان والملخص) يجب أن تكون بالعربية حصراً — لا تكتب جملة كاملة بالإنجليزية أبداً.
+2. أسماء الشركات والمنتجات العلمية الأجنبية (مثل OpenAI وApple وSiri) اذكرها بحروفها اللاتينية لأنها أسماء علمية، لكن باقي الجملة عربية بالكامل.
+3. العنوان: جذاب ومختصر بالعربية (لا يتجاوز 80 حرفاً).
+4. الملخص: مركز في 3 أسطر فقط بالعربية، وافصل بين الأسطر بعلامة \n.
+5. حدد تصنيفاً واحداً لكل خبر من القائمة حصراً: ${CATEGORIES.join('، ')}
+6. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس معرف id، بصيغة:
 [{"id":0,"title":"...","summary":"سطر1\\nسطر2\\nسطر3","category":"ذكاء اصطناعي"}]
 
 الأخبار:
 ${input}`;
 
+  async function generateOnce(p) {
+    const result = await model.generateContent(p);
+    return extractJsonBlock(result.response.text());
+  }
+
   log(`تلخيص ${items.length} خبراً من ${feedName} عبر ${GEMINI_MODEL}...`);
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
   let arr;
   try {
-    arr = extractJsonBlock(text);
+    arr = await generateOnce(prompt);
   } catch (e) {
-    throw new Error(`تعذر تحليل استجابة Gemini (JSON): ${e.message}\n${text.slice(0, 300)}`);
+    throw new Error(`تعذر تحليل استجابة Gemini (JSON): ${e.message}`);
   }
   if (!Array.isArray(arr)) throw new Error('استجابة Gemini ليست مصفوفة');
+
+  const isArabicOutput = (x) => hasArabic(x?.title || '') && hasArabic(x?.summary || '');
+  if (!arr.every(isArabicOutput)) {
+    log('تنبيه: الاستجابة تحتوي نصوصاً غير عربية — إعادة محاولة بتعليمات أشد.');
+    try {
+      arr = await generateOnce(
+        `${prompt}\n\nتذكير صارم أخير: يجب أن يكون العنوان والملخص بالعربية 100% عدا أسماء العلم والشركات. إن كان أي نص بالإنجليزية فأعد كتابته بالعربية الآن قبل الإجابة.`
+      );
+    } catch (e) {
+      log(`إعادة المحاولة فشلت: ${e.message} — سيُستخدم النص كما ورد.`);
+    }
+  }
 
   const byId = new Map(arr.map((x) => [Number(x.id), x]));
   return items.map((it, i) => {
     const g = byId.get(i) || {};
+    const fallback = arabicFallback(it);
     return {
       ...it,
-      title: g.title || it.title,
-      content: g.summary || stripHtml(it.description).slice(0, 300),
+      title: hasArabic(g.title || '') ? g.title : fallback.title,
+      content: hasArabic(g.summary || '') ? g.summary : fallback.content,
       category: CATEGORIES.includes(g.category) ? g.category : 'تقنية عامة',
     };
   });
@@ -231,7 +275,7 @@ async function imageToBase64(url) {
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PortfolioNewsFetcher/1.0)' }, redirect: 'follow' });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length > 300 * 1024) return null;
+    if (buf.length > 500 * 1024) return null;
     const mime = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
     return `data:${mime};base64,${buf.toString('base64')}`;
   } catch {
@@ -258,6 +302,8 @@ function buildDoc(it, preview = false) {
     createdAt: preview ? new Date().toISOString() : admin.firestore.Timestamp.now(),
   };
   base.date = toTimestamp(it.pubDate ? new Date(it.pubDate) : new Date());
+  base.originalTitle = it.originalTitle || it.title || '';
+  if (it.imageUrl) base.imageUrl = it.imageUrl;
   if (it.imageBase64) base.imageBase64 = it.imageBase64;
   return base;
 }
@@ -271,11 +317,27 @@ async function isDuplicate(link) {
 async function saveItem(it) {
   const doc = buildDoc(it, dryRun);
   if (dryRun) {
-    log(`[تجريبي] سيُحفظ: "${doc.title}" | ${doc.source} | ${doc.link} | ${doc.category}`);
+    log(`[تجريبي] سيُحفظ: "${doc.title}" | ${doc.source} | ${doc.link} | ${doc.category}${doc.imageBase64 ? ' | مع صورة' : ''}`);
     return 'dry-run';
   }
   await db.collection('news').add(doc);
   return 'saved';
+}
+
+async function cleanEnglishNews() {
+  if (dryRun) return 0;
+  let deleted = 0;
+  const snap = await db.collection('news').get();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const title = String(d.title || '');
+    if (title && !hasArabic(title)) {
+      await doc.ref.delete();
+      deleted++;
+      log(`حذف خبر إنجليزي قديم: ${title.slice(0, 60)}`);
+    }
+  }
+  return deleted;
 }
 
 async function main() {
@@ -314,19 +376,11 @@ async function main() {
         try {
           summarized = await summarizeBatch(top, feed.name);
         } catch (e) {
-          log(`تحذير: فشل تلخيص ${feed.name}: ${e.message} — سيُستخدم النص الأصلي.`);
-          summarized = top.map((it) => ({
-            ...it,
-            content: it.description.slice(0, 300) || it.title,
-            category: 'تقنية عامة',
-          }));
+          log(`تحذير: فشل تلخيص ${feed.name}: ${e.message} — سيُستخدم البديل العربي.`);
+          summarized = top.map(arabicFallback);
         }
       } else {
-        summarized = top.map((it) => ({
-          ...it,
-          content: it.description.slice(0, 300) || it.title,
-          category: 'تقنية عامة',
-        }));
+        summarized = top.map(arabicFallback);
       }
 
       for (const it of summarized) {
@@ -359,6 +413,11 @@ async function main() {
     }
   }
   log(`تمت معالجة ${fresh.length} خبراً جديداً، الحفظ الناجح: ${savedCount}.`);
+
+  if (!dryRun) {
+    const cleaned = await cleanEnglishNews();
+    if (cleaned > 0) log(`تم مسح ${cleaned} خبراً إنجليزياً قديماً لعرض الأخبار العربية فقط.`);
+  }
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -369,4 +428,15 @@ if (isMain) {
   });
 }
 
-export { buildDoc, toTimestamp, stripHtml, decodeEntities, normalizeItem, CATEGORIES };
+export {
+  buildDoc,
+  toTimestamp,
+  stripHtml,
+  decodeEntities,
+  normalizeItem,
+  extractFirstImg,
+  extractImage,
+  hasArabic,
+  arabicFallback,
+  CATEGORIES,
+};
