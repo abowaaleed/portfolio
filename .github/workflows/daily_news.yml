@@ -57,6 +57,8 @@ jobs:
       - name: نشر تغريدة اليوم على X
         working-directory: scripts
         if: ${{ github.event_name == 'schedule' || inputs.tweet == true }}
+        # لا توقف الـ Workflow إطلاقاً إذا فشل التغريد (مشكلة مؤقتة في حساب X)
+        continue-on-error: true
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

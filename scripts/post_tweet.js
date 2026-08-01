@@ -106,17 +106,21 @@ async function main() {
     process.exit(0);
   }
 
-  const client = new TwitterApi({
-    appKey: X_API_KEY,
-    appSecret: X_API_SECRET,
-    accessToken: X_ACCESS_TOKEN,
-    accessSecret: X_ACCESS_SECRET,
-  });
-  const result = await client.v2.tweet(tweet);
-  log(`تم نشر التغريدة بنجاح: ${result.data?.id || ''}`);
+  try {
+    const client = new TwitterApi({
+      appKey: X_API_KEY,
+      appSecret: X_API_SECRET,
+      accessToken: X_ACCESS_TOKEN,
+      accessSecret: X_ACCESS_SECRET,
+    });
+    const result = await client.v2.tweet(tweet);
+    log(`تم نشر التغريدة بنجاح: ${result.data?.id || ''}`);
+  } catch (e) {
+    console.warn(`[تحذير] فشل نشر التغريدة على X (يُتجاوز دون إيقاف السكربت): ${e?.message || e}`);
+  }
 }
 
 main().then(() => process.exit(0)).catch((e) => {
-  console.error('[FATAL]', e);
-  process.exit(1);
+  console.warn(`[تحذير] انتهى السكربت بخطأ غير متوقع (يُكمل الـ Workflow بنجاح): ${e?.message || e}`);
+  process.exit(0);
 });
