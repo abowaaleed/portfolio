@@ -22,11 +22,13 @@ const {
   MAX_ITEMS_PER_FEED = '5',
   FETCH_IMAGES = 'true',
   DRY_RUN = 'false',
+  REFRESH_EXISTING = 'false',
 } = process.env;
 
 const maxItemsPerFeed = Math.max(1, parseInt(MAX_ITEMS_PER_FEED, 10) || 5);
 const fetchImages = FETCH_IMAGES === 'true';
 const dryRun = DRY_RUN === 'true';
+const refreshExisting = REFRESH_EXISTING === 'true';
 
 const FEEDS = [
   { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
@@ -41,6 +43,8 @@ let db = null;
 function log(...args) {
   console.log(new Date().toISOString(), ...args);
 }
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchWithRetry(url, attempts = 3) {
   let lastErr;
@@ -175,14 +179,74 @@ function hasArabic(text) {
   return /[\u0600-\u06FF]/.test(String(text || ''));
 }
 
-function arabicFallback(it) {
+async function translateText(text) {
+  if (!text || hasArabic(text)) return text;
+  const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=' + encodeURIComponent(text);
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; PortfolioNewsFetcher/1.0)' },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`حالة استجابة الترجمة ${res.status}`);
+  const data = await res.json();
+  const translated = Array.isArray(data?.[0]) ? data[0].map((seg) => seg?.[0] || '').join('') : '';
+  const cleaned = String(translated).replace(/\s+/g, ' ').trim();
+  if (!hasArabic(cleaned)) throw new Error('الترجمة الناتجة غير عربية');
+  return cleaned;
+}
+
+async function arabicFallback(it) {
   const enriched = { ...it };
-  const rawContent = stripHtml(it.description || '').slice(0, 600) || it.title || '';
-  enriched.originalTitle = it.title || '';
-  enriched.title = it.title || '';
-  enriched.content = rawContent;
+  const rawTitle = it.title || '';
+  const rawContent = stripHtml(it.description || '').slice(0, 600) || rawTitle;
+  try {
+    const [title, content] = await Promise.all([
+      translateText(rawTitle),
+      translateText(rawContent),
+    ]);
+    enriched.originalTitle = rawTitle;
+    enriched.title = title;
+    enriched.content = content;
+  } catch (e) {
+    log(`تنبيه: تعذرت الترجمة المجانية: ${e.message}`);
+    enriched.originalTitle = rawTitle;
+    enriched.title = rawTitle;
+    enriched.content = rawContent;
+    enriched._translationFailed = true;
+  }
   enriched.category = it.category || 'تقنية عامة';
   return enriched;
+}
+
+async function refreshExistingNews() {
+  if (dryRun || !db) return 0;
+  let updated = 0;
+  const snap = await db.collection('news').get();
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const title = String(d.title || '');
+    if (!title || hasArabic(title)) continue;
+    log(`إعادة ترجمة خبر إنجليزي مخزّن: ${title.slice(0, 60)}`);
+    try {
+      const newTitle = await translateText(title);
+      const newContent = await translateText(String(d.content || d.description || title).slice(0, 600));
+      await doc.ref.set(
+        {
+          title: newTitle,
+          content: newContent,
+          description: newContent,
+          originalTitle: title,
+          _translatedAt: admin.firestore.Timestamp.now(),
+        },
+        { merge: true }
+      );
+      updated++;
+    } catch (e) {
+      log(`فشل إعادة الترجمة: ${title.slice(0, 60)}: ${e.message}`);
+    }
+    await sleep(300);
+  }
+  return updated;
 }
 
 function extractJsonBlock(text) {
@@ -277,16 +341,17 @@ ${input}`;
   }
 
   const byId = new Map(arr.map((x) => [Number(x.id), x]));
-  return items.map((it, i) => {
+  return Promise.all(items.map(async (it, i) => {
     const g = byId.get(i) || {};
-    const fallback = arabicFallback(it);
+    const fallback = await arabicFallback(it);
     return {
       ...it,
       title: hasArabic(g.title || '') ? g.title : fallback.title,
       content: hasArabic(g.summary || '') ? g.summary : fallback.content,
       category: CATEGORIES.includes(g.category) ? g.category : 'تقنية عامة',
+      _translationFailed: fallback._translationFailed,
     };
-  });
+  }));
 }
 
 async function imageToBase64(url) {
@@ -402,18 +467,22 @@ async function main() {
       try {
         summarized = await summarizeBatch(allItems, 'جميع المصادر');
       } catch (e) {
-        log(`تحذير: فشل تلخيص Gemini: ${e.message} — سيُستخدم البديل (العناوين الأصلية).`);
-        summarized = allItems.map(arabicFallback);
+        log(`تحذير: فشل تلخيص Gemini: ${e.message} — سيُستخدم البديل (الترجمة المجانية).`);
+        summarized = await Promise.all(allItems.map(arabicFallback));
       }
     } else {
       log('تنبيه: GEMINI_API_KEY غير مضبوط — سيتم استخدام العناوين الأصلية دون ترجمة.');
-      summarized = allItems.map(arabicFallback);
+      summarized = await Promise.all(allItems.map(arabicFallback));
     }
   }
 
   const fresh = [];
   const pendingUpdate = [];
   for (const it of summarized) {
+    if (!hasArabic(it.title || '')) {
+      log(`تخطي (عنوان غير عربي بعد الترجمة): ${String(it.title).slice(0, 60)}`);
+      continue;
+    }
     const existing = await findExisting(it.link);
     if (existing) {
       const oldTitle = String(existing.data().title || '');
@@ -466,6 +535,11 @@ async function main() {
     const cleaned = await cleanEnglishNews(savedLinks);
     if (cleaned > 0) log(`تم مسح ${cleaned} خبراً إنجليزياً قديماً لعرض الأخبار العربية فقط.`);
   }
+
+  if (refreshExisting && !dryRun) {
+    const refreshed = await refreshExistingNews();
+    if (refreshed > 0) log(`تمت إعادة ترجمة ${refreshed} خبراً إنجليزياً مخزّناً.`);
+  }
 }
 
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
@@ -486,5 +560,7 @@ export {
   extractImage,
   hasArabic,
   arabicFallback,
+  translateText,
+  refreshExistingNews,
   CATEGORIES,
 };
