@@ -3,12 +3,15 @@
  * عبر Google Gemini، ثم تخزينها في Firebase Firestore (مجموعة news).
  *
  * المتغيرات البيئية المطلوبة:
- *   GEMINI_API_KEY            مفتاح Google Gemini API (إلزامي للتلخيص)
+ *   GEMINI_API_KEY            مفتاح Google Gemini API (إلزامي للتحرير الذكي والفلترة)
  *   FIREBASE_SERVICE_ACCOUNT  محتوى JSON لمفتاح الخدمة (إلزامي للحفظ)
  *   GEMINI_MODEL              النموذج المستخدم (الافتراضي gemini-2.0-flash)
- *   MAX_ITEMS_PER_FEED        عدد الأخبار القصوى لكل مصدر (الافتراضي 5)
+ *   MAX_ITEMS_PER_FEED        عدد العناصر المسحوبة من كل مصدر لعرضها على المحرر (الافتراضي 10)
+ *   MAX_PUBLISHED             الحد الأقصى للأخبار المنشورة بعد الفلترة (الافتراضي 10)
  *   FETCH_IMAGES              جلب صورة الخبر وتخزينها base64 (الافتراضي true)
  *   DRY_RUN                   true = تجربة بدون الحفظ الفعلي (الافتراضي false)
+ *   REFRESH_EXISTING          true = إعادة ترجمة الأخبار الإنجليزية المخزنة (الافتراضي false)
+ *   WIPE_FIRST                true = مسح مجموعة news بالكامل قبل المعالجة (الافتراضي false)
  */
 import admin from 'firebase-admin';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -19,16 +22,20 @@ const {
   GEMINI_API_KEY,
   FIREBASE_SERVICE_ACCOUNT,
   GEMINI_MODEL = 'gemini-2.0-flash',
-  MAX_ITEMS_PER_FEED = '5',
+  MAX_ITEMS_PER_FEED = '10',
+  MAX_PUBLISHED = '10',
   FETCH_IMAGES = 'true',
   DRY_RUN = 'false',
   REFRESH_EXISTING = 'false',
+  WIPE_FIRST = 'false',
 } = process.env;
 
-const maxItemsPerFeed = Math.max(1, parseInt(MAX_ITEMS_PER_FEED, 10) || 5);
+const maxItemsPerFeed = Math.max(1, parseInt(MAX_ITEMS_PER_FEED, 10) || 10);
+const maxPublished = Math.max(1, parseInt(MAX_PUBLISHED, 10) || 10);
 const fetchImages = FETCH_IMAGES === 'true';
 const dryRun = DRY_RUN === 'true';
 const refreshExisting = REFRESH_EXISTING === 'true';
+const wipeFirst = WIPE_FIRST === 'true';
 
 const FEEDS = [
   { name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
@@ -36,7 +43,7 @@ const FEEDS = [
   { name: 'أخبار التقنية (aitnews)', url: 'https://aitnews.com/feed/' },
 ];
 
-const CATEGORIES = ['أجهزة', 'ذكاء اصطناعي', 'استحواذات', 'تقنية عامة'];
+const CATEGORIES = ['أجهزة', 'ذكاء اصطناعي', 'استحواذات', 'شركات تقنية', 'سيارات ذكية'];
 
 let db = null;
 
@@ -179,6 +186,51 @@ function hasArabic(text) {
   return /[\u0600-\u06FF]/.test(String(text || ''));
 }
 
+const WEAK_PATTERNS = [
+  /\breview\b/i, /\bbest\b/i, /\bgift/i, /\bguide\b/i, /\bhow[- ]to\b/i,
+  /\bshopping\b/i, /\bdeals?\b/i, /\bsale\b/i, /\bdiscount/i, /\bcoupon\b/i,
+  /\btips\b/i, /\bbuy\b/i, /\btop \d+/i, /\bhats?\b/i, /\bfans?\b/i,
+  /\brecommend/i, /\bcheap/i, /\bunder \$/i, /\bgiveaway/i, /\bessentials\b/i,
+  /\bback[- ]to[- ]school/i, /\bround[- ]up\b/i, /\bbuying\b/i, /\bvs\.?\b/i,
+  /\bshould you\b/i, /\bworth it\b/i, /\bopinion\b/i, /\bcolumn\b/i,
+];
+
+const AR_WEAK_PATTERNS = [
+  /مراجعة/, /دليل/, /أفضل/, /شراء/, /هدايا?/, /نصائح/, /عروض/, /خصومات?/,
+  /كوبون/, /مقارنة/, /تسوق/, /تجربة|انطباع/, /أفكار/, /قائمة/,
+];
+
+const STRONG_PATTERNS = [
+  /\biphone\b/i, /\bgalaxy\b/i, /\bapple\b/i, /\bgoogle\b/i, /\bsamsung\b/i,
+  /\bmicrosoft\b/i, /\btesla\b/i, /\blucid\b/i, /\bgpt\b/i, /\bopena[ií]/i,
+  /\bclaude\b/i, /\bcopilot\b/i, /\bqualcomm\b/i, /\bintel\b/i, /\bamd\b/i,
+  /\bnvidia\b/i, /\bchip\b/i, /\bprocessor\b/i, /\bacquisition\b/i,
+  /\bacquires\b/i, /\bmerger\b/i, /\bipo\b/i, /\bai\b/i,
+  /artificial intelligence/i, /\bquantum\b/i, /\bsemiconductor/i,
+  /\btelecom/i, /\b5g\b/i, /\b6g\b/i, /\bleak/i, /\brobot/i, /\bev\b/i,
+  /\belectric vehicle/i, /\bsmartphone\b/i, /\btablet\b/i, /\blaptop\b/i,
+  /\bwatch\b/i, /\bheadset\b/i, /\bar\b/i, /\bvr\b/i, /\bcloud\b/i,
+  /\bsatellite\b/i, /\bsolar\b/i, /\bbattery\b/i,
+];
+
+function isWorthPublishing(it) {
+  const title = String(it.title || '');
+  const text = `${title} ${String(it.description || '')}`;
+  if (hasArabic(text)) {
+    if (AR_WEAK_PATTERNS.some((re) => re.test(text))) return false;
+    return true;
+  }
+  if (WEAK_PATTERNS.some((re) => re.test(text))) return false;
+  return STRONG_PATTERNS.some((re) => re.test(text));
+}
+
+async function localFilterAndTranslate(items) {
+  const kept = items.filter(isWorthPublishing);
+  const rejected = items.length - kept.length;
+  if (rejected > 0) log(`الفلترة المحلية: رفض ${rejected} خبراً ضعيفاً (أدلة/مراجعات/رأي).`);
+  return Promise.all(kept.map(arabicFallback));
+}
+
 async function translateText(text) {
   if (!text || hasArabic(text)) return text;
   const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ar&dt=t&q=' + encodeURIComponent(text);
@@ -276,21 +328,25 @@ async function summarizeBatch(items, feedName) {
     .map((it, i) => JSON.stringify({ id: i, title: it.title, description: it.description, pubDate: it.pubDate }))
     .join('\n');
 
-  const prompt = `أنت محرر أخبار تقنية محترف يجيد العربية الفصحى. ستستلم أخباراً تقنية قد تكون عناوينها ومحتواها بالإنجليزية أو العربية.
+  const prompt = `أنت "مدير تحرير تقني" في موقع عربي تقني محترف. ستستلم أخباراً تقنية خام من خلاصات RSS عناوينها ومحتواها قد تكون بالإنجليزية أو العربية.
 
-مهمتك لكل خبر:
-- ترجم العنوان الأصلي ترجمةً دقيقة وكاملة إلى العربية الفصحى. العنوان المترجم يجب أن يكون العنوان الحقيقي للخبر نفسه بنفس معناه — وليس وصفاً عاماً أو مختصراً.
-- اكتب ملخصاً شاملاً للخبر من 3 إلى 5 أسطر يغطي جوهر القصة: ماذا حدث، ولفائدة من، وما الأثر المتوقع.
+أولاً — الانتقاء (الفلترة):
+لكل خبر اقرأ عنوانه ومحتواه ثم احكم: قَبول أم رفض؟
+- قَبول إذا كان من النوع التقني الثقيل والجاذب للقارئ العربي مثل: إطلاق هواتف وأجهزة جديدة، مؤتمرات وإعلانات الشركات الكبرى (Apple / Google / Samsung / Microsoft)، تسريبات الأجهزة القادمة، تطورات وتحديثات الذكاء الاصطناعي، استحواذات وصفقات الشركات، أخبار السيارات الذكية والكهربائية (Tesla / Lucid).
+- رفض فوراً إذا كان: مقال رأي شخصي، دليل شراء أو تسوق، مراجعة جهاز بسيط (مروحة، قبعة، ملحق رخيص)، محتوى عام أو ترفيهي، محتوى موسمي (عروض، هدايا، نصائح شراء)، أو خبراً ضعيفاً لا قيمة حقيقية له.
+
+ثانياً — الصياغة الصحفية (للمقبول فقط):
+- أعد صياغة العنوان بالعربية بأسلوب صحفي مشوق وجذاب يحفز القراءة، دقيق وغير مبالغ، ولا يتجاوز 90 حرفاً. مثال: بدلاً من "تحديث تطبيق" اكتب "جوجل تطلق تحديثاً ثورياً لتطبيقاتها.. إليك أبرز الميزات".
+- اكتب ملخصاً من 3 إلى 4 أسطر غنياً بالمعلومات الحقيقية المستخرجة من النص (المواصفات، الأسعار، التواريخ، التفاصيل المعلنة) بحيث يكتفي القارئ بفتح البطاقة ليعرف الجوهر.
 
 قواعد صارمة:
-1. كل المخرجات (العنوان والملخص) بالعربية حصراً — لا تكتب جملة كاملة بالإنجليزية أبداً.
-2. أسماء العلم والشركات والمنتجات الأجنبية (مثل OpenAI وApple وSiri وGoogle) تُكتب بحروفها اللاتينية لأنها أسماء علمية، وبقية الجملة عربية بالكامل.
-3. ممنوع استخدام عبارات عامة في العنوان مثل "خبر تقني جديد" أو "أعلنت شركة عن إطلاق..." — العنوان يجب أن يكون ترجمة أمينة للعنوان الأصلي.
-4. العنوان: مختصر وجذاب (لا يتجاوز 80 حرفاً).
-5. الملخص: من 3 إلى 5 أسطر، وافصل بين الأسطر بعلامة \n.
-6. حدد تصنيفاً واحداً لكل خبر من القائمة حصراً: ${CATEGORIES.join('، ')}
-7. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس معرف id، بصيغة:
-[{"id":0,"title":"العنوان المترجم","summary":"سطر1\\nسطر2\\nسطر3\\nسطر4","category":"ذكاء اصطناعي"}]
+1. كل المخرجات بالعربية حصراً؛ أسماء العلم والشركات والمنتجات الأجنبية (OpenAI، Apple، iPhone، Tesla) تبقى بحروفها اللاتينية.
+2. لا تختلق معلومات غير موجودة في النص الأصلي إطلاقاً.
+3. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس المعرفات id، لكل عنصر بالصيغة:
+{"id":0,"publish":true,"reason":"سبب موجز للقبول أو الرفض","title":"العنوان العربي المشوق","summary":"سطر1\\nسطر2\\nسطر3","category":"أجهزة"}
+- للمرفوض: publish=false و reason يوضح السبب، واترك title و summary فارغين.
+- التصنيف category من القائمة حصراً: ${CATEGORIES.join('، ')}
+- إن كان عدد المقبولين قليلاً فاكتفِ بهم ولا تحاول حشو صفحة بأخبار ضعيفة.
 
 الأخبار:
 ${input}`;
@@ -329,29 +385,48 @@ ${input}`;
   if (!Array.isArray(arr)) throw new Error('استجابة Gemini ليست مصفوفة');
 
   const isArabicTitle = (x) => hasArabic(x?.title || '');
-  if (!arr.every(isArabicTitle)) {
-    log('تنبيه: بعض العناوين غير عربية — إعادة محاولة بتعليمات أشد.');
+  const acceptedResp = arr.filter((x) => x?.publish === true);
+  if (acceptedResp.length && !acceptedResp.every(isArabicTitle)) {
+    log('تنبيه: بعض العناوين المقبولة غير عربية — إعادة محاولة بتعليمات أشد.');
     try {
       arr = await generateOnce(
-        `${prompt}\n\nتذكير صارم أخير: العنوان يجب أن يكون ترجمة عربية حقيقية للعنوان الأصلي 100% عدا أسماء العلم والشركات. إن كان أي عنوان بالإنجليزية فأعد ترجمته الآن قبل الإجابة. الملخص أيضاً يجب أن يكون بالعربية.`
+        `${prompt}\n\nتذكير صارم أخير: العنوان يجب أن يكون صياغة عربية حقيقية للخبر المقبول 100% عدا أسماء العلم والشركات، والملخص بالعربية. إن كانت أي استجابة publish=true وعنوانها بالإنجليزية فأعد صياغتها بالعربية قبل الإجابة.`
       );
     } catch (e) {
-      log(`إعادة المحاولة فشلت: ${e.message} — سيُستخدم النص كما ورد.`);
+      log(`إعادة المحاولة فشلت: ${e.message} — سيُستخدم ما ورد.`);
     }
   }
 
+  const hasPublishFlag = arr.some((x) => typeof x?.publish === 'boolean');
   const byId = new Map(arr.map((x) => [Number(x.id), x]));
-  return Promise.all(items.map(async (it, i) => {
+  const accepted = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
     const g = byId.get(i) || {};
-    const fallback = await arabicFallback(it);
-    return {
+    const isAccepted = hasPublishFlag ? g.publish === true : hasArabic(g.title || '');
+    if (!isAccepted) {
+      log(`رفض بعد الفلترة: ${String(it.title).slice(0, 70)}${g.reason ? ` — ${g.reason}` : ''}`);
+      continue;
+    }
+    const title = hasArabic(g.title || '') ? g.title : '';
+    const content = hasArabic(g.summary || '') ? g.summary : '';
+    let fallback = null;
+    if (!title || !content) fallback = await arabicFallback(it);
+    const finalTitle = title || (fallback && fallback.title) || it.title;
+    const finalContent = content || (fallback && fallback.content) || stripHtml(it.description || '').slice(0, 300);
+    if (!hasArabic(finalTitle)) {
+      log(`تخطي (عنوان غير عربي بعد الترجمة): ${String(it.title).slice(0, 60)}`);
+      continue;
+    }
+    accepted.push({
       ...it,
-      title: hasArabic(g.title || '') ? g.title : fallback.title,
-      content: hasArabic(g.summary || '') ? g.summary : fallback.content,
+      title: finalTitle,
+      content: finalContent,
       category: CATEGORIES.includes(g.category) ? g.category : 'تقنية عامة',
-      _translationFailed: fallback._translationFailed,
-    };
-  }));
+      _translationFailed: fallback ? fallback._translationFailed : false,
+    });
+  }
+  return accepted;
 }
 
 async function imageToBase64(url) {
@@ -426,6 +501,18 @@ async function cleanEnglishNews(savedLinks = new Set()) {
   return deleted;
 }
 
+async function wipeNews() {
+  if (dryRun || !db) return 0;
+  let deleted = 0;
+  const snap = await db.collection('news').get();
+  for (const doc of snap.docs) {
+    await doc.ref.delete();
+    deleted++;
+  }
+  if (deleted > 0) log(`تم مسح ${deleted} خبراً من مجموعة news للبدء بنشرة جديدة.`);
+  return deleted;
+}
+
 async function main() {
   if (GEMINI_API_KEY) {
     log('Gemini API: متاح');
@@ -444,6 +531,9 @@ async function main() {
     db = admin.firestore();
     db.settings({ ignoreUndefinedProperties: true });
     log(`Firestore جاهز على مشروع: ${sa.project_id || 'غير معروف'}`);
+    if (wipeFirst) {
+      await wipeNews();
+    }
   }
 
   const allItems = [];
@@ -466,15 +556,18 @@ async function main() {
     if (GEMINI_API_KEY) {
       try {
         summarized = await summarizeBatch(allItems, 'جميع المصادر');
+        if (!summarized.length) log('Gemini: لم يتبقَّ خبر جدير بالنشر بعد الفلترة.');
+        else log(`Gemini: تم قبول ${summarized.length} خبراً جديراً بالنشر من أصل ${allItems.length}.`);
       } catch (e) {
-        log(`تحذير: فشل تلخيص Gemini: ${e.message} — سيُستخدم البديل (الترجمة المجانية).`);
-        summarized = await Promise.all(allItems.map(arabicFallback));
+        log(`تحذير: فشل تلخيص Gemini: ${e.message} — فلترة محلية + ترجمة مجانية.`);
+        summarized = await localFilterAndTranslate(allItems);
       }
     } else {
-      log('تنبيه: GEMINI_API_KEY غير مضبوط — سيتم استخدام العناوين الأصلية دون ترجمة.');
-      summarized = await Promise.all(allItems.map(arabicFallback));
+      log('تنبيه: GEMINI_API_KEY غير مضبوط — فلترة محلية + ترجمة مجانية.');
+      summarized = await localFilterAndTranslate(allItems);
     }
   }
+  summarized = summarized.slice(0, maxPublished);
 
   const fresh = [];
   const pendingUpdate = [];
@@ -561,6 +654,9 @@ export {
   hasArabic,
   arabicFallback,
   translateText,
+  isWorthPublishing,
+  localFilterAndTranslate,
+  wipeNews,
   refreshExistingNews,
   CATEGORIES,
 };

@@ -5,7 +5,12 @@ on:
   schedule:
     - cron: '0 4 * * *'
   # تشغيل يدوي لاختبار السكربت فوراً من تبويب Actions
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      wipe:
+        description: 'مسح مجموعة الأخبار الحالية قبل التشغيل'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -40,4 +45,5 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           REFRESH_EXISTING: 'true'
+          WIPE_FIRST: ${{ inputs.wipe }}
         run: node fetch_news.js
