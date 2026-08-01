@@ -5,7 +5,7 @@
  * المتغيرات البيئية المطلوبة:
  *   GEMINI_API_KEY            مفتاح Google Gemini API (إلزامي للتلخيص)
  *   FIREBASE_SERVICE_ACCOUNT  محتوى JSON لمفتاح الخدمة (إلزامي للحفظ)
- *   GEMINI_MODEL              النموذج المستخدم (الافتراضي gemini-1.5-flash)
+ *   GEMINI_MODEL              النموذج المستخدم (الافتراضي gemini-2.0-flash)
  *   MAX_ITEMS_PER_FEED        عدد الأخبار القصوى لكل مصدر (الافتراضي 5)
  *   FETCH_IMAGES              جلب صورة الخبر وتخزينها base64 (الافتراضي true)
  *   DRY_RUN                   true = تجربة بدون الحفظ الفعلي (الافتراضي false)
@@ -177,16 +177,10 @@ function hasArabic(text) {
 
 function arabicFallback(it) {
   const enriched = { ...it };
-  const rawContent = stripHtml(it.description || '').slice(0, 300) || it.title || '';
-  if (hasArabic(rawContent) || hasArabic(it.title || '')) {
-    enriched.title = it.title || '';
-    enriched.content = rawContent;
-  } else {
-    const source = it.source || 'المواقع التقنية';
-    enriched.originalTitle = it.title || '';
-    enriched.title = `خبر تقني جديد من ${source}`;
-    enriched.content = `إليك أحدث خبر تقني من ${source}. للاطلاع على التفاصيل الكاملة والمصدر الأصلي، اضغط على البطاقة للقراءة.`;
-  }
+  const rawContent = stripHtml(it.description || '').slice(0, 600) || it.title || '';
+  enriched.originalTitle = it.title || '';
+  enriched.title = it.title || '';
+  enriched.content = rawContent;
   enriched.category = it.category || 'تقنية عامة';
   return enriched;
 }
@@ -218,15 +212,21 @@ async function summarizeBatch(items, feedName) {
     .map((it, i) => JSON.stringify({ id: i, title: it.title, description: it.description, pubDate: it.pubDate }))
     .join('\n');
 
-  const prompt = `أنت محرر أخبار تقنية محترف باللغة العربية. مهمتك ترجمة وصياغة الأخبار التالية إلى العربية الفصحى الواضحة والجذابة.
+  const prompt = `أنت محرر أخبار تقنية محترف يجيد العربية الفصحى. ستستلم أخباراً تقنية قد تكون عناوينها ومحتواها بالإنجليزية أو العربية.
+
+مهمتك لكل خبر:
+- ترجم العنوان الأصلي ترجمةً دقيقة وكاملة إلى العربية الفصحى. العنوان المترجم يجب أن يكون العنوان الحقيقي للخبر نفسه بنفس معناه — وليس وصفاً عاماً أو مختصراً.
+- اكتب ملخصاً شاملاً للخبر من 3 إلى 5 أسطر يغطي جوهر القصة: ماذا حدث، ولفائدة من، وما الأثر المتوقع.
+
 قواعد صارمة:
-1. كل المخرجات (العنوان والملخص) يجب أن تكون بالعربية حصراً — لا تكتب جملة كاملة بالإنجليزية أبداً.
-2. أسماء الشركات والمنتجات العلمية الأجنبية (مثل OpenAI وApple وSiri) اذكرها بحروفها اللاتينية لأنها أسماء علمية، لكن باقي الجملة عربية بالكامل.
-3. العنوان: جذاب ومختصر بالعربية (لا يتجاوز 80 حرفاً).
-4. الملخص: مركز في 3 أسطر فقط بالعربية، وافصل بين الأسطر بعلامة \n.
-5. حدد تصنيفاً واحداً لكل خبر من القائمة حصراً: ${CATEGORIES.join('، ')}
-6. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس معرف id، بصيغة:
-[{"id":0,"title":"...","summary":"سطر1\\nسطر2\\nسطر3","category":"ذكاء اصطناعي"}]
+1. كل المخرجات (العنوان والملخص) بالعربية حصراً — لا تكتب جملة كاملة بالإنجليزية أبداً.
+2. أسماء العلم والشركات والمنتجات الأجنبية (مثل OpenAI وApple وSiri وGoogle) تُكتب بحروفها اللاتينية لأنها أسماء علمية، وبقية الجملة عربية بالكامل.
+3. ممنوع استخدام عبارات عامة في العنوان مثل "خبر تقني جديد" أو "أعلنت شركة عن إطلاق..." — العنوان يجب أن يكون ترجمة أمينة للعنوان الأصلي.
+4. العنوان: مختصر وجذاب (لا يتجاوز 80 حرفاً).
+5. الملخص: من 3 إلى 5 أسطر، وافصل بين الأسطر بعلامة \n.
+6. حدد تصنيفاً واحداً لكل خبر من القائمة حصراً: ${CATEGORIES.join('، ')}
+7. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس معرف id، بصيغة:
+[{"id":0,"title":"العنوان المترجم","summary":"سطر1\\nسطر2\\nسطر3\\nسطر4","category":"ذكاء اصطناعي"}]
 
 الأخبار:
 ${input}`;
@@ -245,12 +245,12 @@ ${input}`;
   }
   if (!Array.isArray(arr)) throw new Error('استجابة Gemini ليست مصفوفة');
 
-  const isArabicOutput = (x) => hasArabic(x?.title || '') && hasArabic(x?.summary || '');
-  if (!arr.every(isArabicOutput)) {
-    log('تنبيه: الاستجابة تحتوي نصوصاً غير عربية — إعادة محاولة بتعليمات أشد.');
+  const isArabicTitle = (x) => hasArabic(x?.title || '');
+  if (!arr.every(isArabicTitle)) {
+    log('تنبيه: بعض العناوين غير عربية — إعادة محاولة بتعليمات أشد.');
     try {
       arr = await generateOnce(
-        `${prompt}\n\nتذكير صارم أخير: يجب أن يكون العنوان والملخص بالعربية 100% عدا أسماء العلم والشركات. إن كان أي نص بالإنجليزية فأعد كتابته بالعربية الآن قبل الإجابة.`
+        `${prompt}\n\nتذكير صارم أخير: العنوان يجب أن يكون ترجمة عربية حقيقية للعنوان الأصلي 100% عدا أسماء العلم والشركات. إن كان أي عنوان بالإنجليزية فأعد ترجمته الآن قبل الإجابة. الملخص أيضاً يجب أن يكون بالعربية.`
       );
     } catch (e) {
       log(`إعادة المحاولة فشلت: ${e.message} — سيُستخدم النص كما ورد.`);
@@ -298,6 +298,7 @@ function buildDoc(it, preview = false) {
     source: it.source || '',
     category: it.category || 'تقنية عامة',
     link: it.link || '',
+    url: it.link || '',
     publishedAt: it.pubDate || null,
     createdAt: preview ? new Date().toISOString() : admin.firestore.Timestamp.now(),
   };
@@ -324,14 +325,15 @@ async function saveItem(it) {
   return 'saved';
 }
 
-async function cleanEnglishNews() {
+async function cleanEnglishNews(savedLinks = new Set()) {
   if (dryRun) return 0;
   let deleted = 0;
   const snap = await db.collection('news').get();
   for (const doc of snap.docs) {
     const d = doc.data();
     const title = String(d.title || '');
-    if (title && !hasArabic(title)) {
+    const link = String(d.link || '');
+    if (title && !hasArabic(title) && !savedLinks.has(link)) {
       await doc.ref.delete();
       deleted++;
       log(`حذف خبر إنجليزي قديم: ${title.slice(0, 60)}`);
@@ -404,10 +406,12 @@ async function main() {
   }
 
   let savedCount = 0;
+  const savedLinks = new Set();
   for (const it of fresh) {
     try {
       await saveItem(it);
       savedCount++;
+      savedLinks.add(it.link);
     } catch (e) {
       log(`فشل حفظ: ${it.link}: ${e.message}`);
     }
@@ -415,7 +419,7 @@ async function main() {
   log(`تمت معالجة ${fresh.length} خبراً جديداً، الحفظ الناجح: ${savedCount}.`);
 
   if (!dryRun) {
-    const cleaned = await cleanEnglishNews();
+    const cleaned = await cleanEnglishNews(savedLinks);
     if (cleaned > 0) log(`تم مسح ${cleaned} خبراً إنجليزياً قديماً لعرض الأخبار العربية فقط.`);
   }
 }
