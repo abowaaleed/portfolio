@@ -1,0 +1,41 @@
+name: Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: بناء ونشر موقع Flutter على GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: سحب المستودع
+        uses: actions/checkout@v4
+
+      - name: إعداد Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.6'
+          channel: 'stable'
+
+      - name: تثبيت الاعتماديات
+        run: flutter pub get
+
+      - name: بناء الويب
+        run: flutter build web --release --base-href "/portfolio/"
+
+      - name: النشر إلى فرع gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
+          publish_branch: gh-pages
+          force_orphan: true
