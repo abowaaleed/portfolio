@@ -19,6 +19,7 @@ import {
   editBatch, localFilterAndTranslate, trendsFallback,
   TECH_CATEGORIES, SA_CATEGORIES, GLOBAL_CATEGORIES,
 } from './lib/editor.js';
+import { filterBlocked } from './lib/moderation.js';
 
 const {
   GEMINI_API_KEY,
@@ -67,6 +68,9 @@ async function runSource(label, collection, items, mode, categories, { requireSt
   }
 
   edited = edited.filter((it) => hasArabic(it.title || ''));
+  const moderated = filterBlocked(edited);
+  if (moderated.removed > 0) log(`${label}: استُبعد ${moderated.removed} عنصراً محظوراً قبل التخزين في Firestore.`);
+  edited = moderated.kept;
   if (!edited.length) {
     log(`${label}: لا عناصر صالحة للنشر بعد الفلترة.`);
     return;

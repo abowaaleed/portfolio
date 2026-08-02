@@ -3,6 +3,7 @@
  */
 import admin from 'firebase-admin';
 import { log, stripHtml, imageToBase64 } from './core.js';
+import { isBlockedContent } from './moderation.js';
 
 let db = null;
 
@@ -50,6 +51,10 @@ export function buildDoc(it, preview = false) {
 }
 
 export async function saveItemToCollection(collection, it, dryRun, fetchImages) {
+  if (isBlockedContent(it)) {
+    log(`حظر المحتوى قبل التخزين في ${collection}: "${String(it.title || '').slice(0, 60)}" — لم يُحفظ.`);
+    return 'blocked';
+  }
   if (fetchImages && it.imageUrl) {
     it.imageBase64 = await imageToBase64(it.imageUrl);
   }
@@ -126,7 +131,11 @@ export async function saveBatch(collection, items, { dryRun, fetchImages, dedupe
       }
     }
     try {
-      await saveItemToCollection(collection, it, dryRun, fetchImages);
+      const res = await saveItemToCollection(collection, it, dryRun, fetchImages);
+      if (res === 'blocked') {
+        skipped++;
+        continue;
+      }
       savedCount++;
       if (url) savedUrls.add(url);
     } catch (e) {

@@ -7,6 +7,7 @@
  */
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { log, hasArabic, stripHtml, translateText, extractJsonBlock, sleep } from './core.js';
+import { filterBlocked, isBlockedContent, MODERATION_RULES } from './moderation.js';
 
 export const TECH_CATEGORIES = ['أجهزة', 'ذكاء اصطناعي', 'استحواذات', 'شركات تقنية', 'سيارات ذكية'];
 export const SA_CATEGORIES = ['سياسي', 'اقتصادي', 'تقني', 'صحي', 'رياضي', 'عام'];
@@ -77,15 +78,21 @@ export async function arabicFallback(it, defaultCategory = 'تقنية عامة'
 }
 
 export async function localFilterAndTranslate(items, { requireStrong = true, defaultCategory = 'تقنية عامة' } = {}) {
-  const kept = items.filter((it) => isWorthPublishing(it, { requireStrong }));
-  const rejected = items.length - kept.length;
-  if (rejected > 0) log(`الفلترة المحلية: رفض ${rejected} عنصراً ضعيفاً (أدلة/مراجعات/رأي).`);
+  const moderated = filterBlocked(items);
+  if (moderated.removed > 0) log(`الفلترة المحلية: استُبعد ${moderated.removed} عنصراً محظوراً قبل الترجمة.`);
+  const kept = moderated.kept.filter((it) => isWorthPublishing(it, { requireStrong }));
+  const rejected = moderated.kept.length - kept.length + moderated.removed;
+  if (rejected > 0) log(`الفلترة المحلية: رفض ${rejected} عنصراً (محتوى محظور أو ضعيف).`);
   return Promise.all(kept.map((it) => arabicFallback(it, defaultCategory)));
 }
 
 export async function trendsFallback(items) {
   const out = [];
   for (const it of items) {
+    if (isBlockedContent(it)) {
+      log(`حظر المحتوى (ترند): "${String(it.title || '').slice(0, 70)}"`);
+      continue;
+    }
     const f = await arabicFallback(it);
     if (!f.summary || f.summary === f.title) {
       f.summary = f.title;
@@ -116,6 +123,8 @@ function buildPrompt(items, label, { mode, categories }) {
 
   return `أنت "مدير تحرير" في منصة عربية تقنية احترافية. ستستلم محتوى خام من مصدر: "${label}". عناوينه ومحتواه قد تكون بالإنجليزية أو العربية.
 
+${MODERATION_RULES}
+
 أولاً — الانتقاء (الفلترة):
 ${acceptRules}
 
@@ -137,13 +146,20 @@ ${input}`;
 
 export async function editBatch(items, label, { mode = 'news', categories = TECH_CATEGORIES } = {}) {
   if (!items || !items.length) return [];
+  const moderatedIn = filterBlocked(items);
+  if (moderatedIn.removed > 0) log(`فلتر المحتوى قبل Gemini: استُبعد ${moderatedIn.removed} عنصراً محظوراً من "${label}".`);
+  const work = moderatedIn.kept;
+  if (!work.length) {
+    log(`"${label}": لا عناصر صالحة بعد فلتر المحتوى.`);
+    return [];
+  }
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({
     model: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
     generationConfig: { temperature: 0.4, responseMimeType: 'application/json' },
   });
 
-  const prompt = buildPrompt(items, label, { mode, categories });
+  const prompt = buildPrompt(work, label, { mode, categories });
 
   async function generateWithRetry(promptText, attempts = 3) {
     let lastErr;
@@ -169,7 +185,7 @@ export async function editBatch(items, label, { mode = 'news', categories = TECH
     return extractJsonBlock(result.response.text());
   }
 
-  log(`تحرير ${items.length} عنصراً من "${label}" عبر ${process.env.GEMINI_MODEL || 'gemini-2.0-flash'}...`);
+  log(`تحرير ${work.length} عنصراً من "${label}" عبر ${process.env.GEMINI_MODEL || 'gemini-2.0-flash'}...`);
   let arr;
   try {
     arr = await generateOnce(prompt);
@@ -194,8 +210,8 @@ export async function editBatch(items, label, { mode = 'news', categories = TECH
   const hasPublishFlag = arr.some((x) => typeof x?.publish === 'boolean');
   const byId = new Map(arr.map((x) => [Number(x.id), x]));
   const accepted = [];
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
+  for (let i = 0; i < work.length; i++) {
+    const it = work[i];
     const g = byId.get(i) || {};
     const isAccepted = hasPublishFlag ? g.publish === true : hasArabic(g.title || '');
     if (!isAccepted) {
@@ -222,5 +238,7 @@ export async function editBatch(items, label, { mode = 'news', categories = TECH
       _translationFailed: fallback ? fallback._translationFailed : false,
     });
   }
-  return accepted;
+  const moderatedOut = filterBlocked(accepted);
+  if (moderatedOut.removed > 0) log(`فلتر المحتوى بعد Gemini: استُبعد ${moderatedOut.removed} عنصراً محظوراً من "${label}".`);
+  return moderatedOut.kept;
 }
