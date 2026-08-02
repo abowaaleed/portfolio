@@ -549,107 +549,259 @@ class _TutorialsTab extends StatelessWidget {
 
 class _NewsTab extends StatelessWidget {
   const _NewsTab();
+
+  static const _sections = <_NewsSectionDef>[
+    _NewsSectionDef(collection: 'tech_news', label: 'أخبار التقنية', icon: Icons.phone_android, color: Color(0xFF00D4FF)),
+    _NewsSectionDef(collection: 'saudi_news', label: 'الأخبار المحلية', icon: Icons.flag, color: Color(0xFF34A853)),
+    _NewsSectionDef(collection: 'google_trends', label: 'ترند Google', icon: Icons.trending_up, color: Color(0xFF4285F4)),
+    _NewsSectionDef(collection: 'twitter_trends', label: 'ترند X', icon: Icons.alternate_email, color: Color(0xFF1DA1F2)),
+    _NewsSectionDef(collection: 'global_news', label: 'نبض عالمي', icon: Icons.public, color: Color(0xFFFBBC05)),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection('news').orderBy('date', descending: true).snapshots(),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('إدارة الأخبار والترندات', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+        const SizedBox(height: 4),
+        Text('الأقسام الخمسة تُحدَّث لحظياً من Firestore — الحذف مباشر من المجموعة والتعديل يُحفظ فوراً.',
+            style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        const SizedBox(height: 16),
+        for (final s in _sections) _NewsSectionAdmin(section: s),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+class _NewsSectionDef {
+  final String collection;
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _NewsSectionDef({required this.collection, required this.label, required this.icon, required this.color});
+}
+
+class _NewsSectionAdmin extends StatelessWidget {
+  final _NewsSectionDef section;
+  const _NewsSectionAdmin({required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection(section.collection).orderBy('date', descending: true).snapshots(),
       builder: (ctx, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final news = snap.data!.docs;
-        return ListView(
-          padding: const EdgeInsets.all(16),
+        final docs = snap.data?.docs ?? [];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Text('الأخبار (${news.length})', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
-              const Spacer(),
-              ElevatedButton.icon(onPressed: () => _showNewsEditor(context, null), icon: const Icon(Icons.add, size: 18), label: const Text('إضافة خبر')),
-            ]),
-            ...news.map((doc) {
-              final data = doc.data();
-              return Card(child: ListTile(
-                title: Text(data['title'] as String? ?? '', style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
-                subtitle: Text(data['source'] as String? ?? '', style: TextStyle(fontSize: 12, color: AppColors.accent)),
-                trailing: IconButton(icon: Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () async {
-                  await FirebaseFirestore.instance.collection('news').doc(doc.id).delete();
-                }),
-              ));
-            }),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: section.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(section.icon, size: 16, color: section.color),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(section.label,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: section.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20)),
+                  child: Text('${docs.length}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: section.color)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (!snap.hasData)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+            else if (docs.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text('لا توجد عناصر في هذا القسم.',
+                    style: TextStyle(fontSize: 13, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+              )
+            else
+              ...docs.map((doc) => _NewsAdminCard(section: section, doc: doc)),
+            const SizedBox(height: 20),
           ],
         );
       },
     );
   }
+}
 
-  void _showNewsEditor(BuildContext context, dynamic doc) {
-    final data = doc?.data() as Map<String, dynamic>?;
-    final titleCtrl = TextEditingController(text: data?['title'] as String? ?? '');
-    final contentCtrl = TextEditingController(text: data?['content'] as String? ?? '');
-    final sourceCtrl = TextEditingController(text: data?['source'] as String? ?? '');
-    final urlCtrl = TextEditingController(text: data?['url'] as String? ?? '');
-    String? imageBase64 = data?['imageBase64'] as String?;
-    showDialog(
+class _NewsAdminCard extends StatelessWidget {
+  final _NewsSectionDef section;
+  final QueryDocumentSnapshot<Object?> doc;
+  const _NewsAdminCard({required this.section, required this.doc});
+
+  String _fmtDate(dynamic v) {
+    DateTime? dt;
+    if (v is Timestamp) {
+      dt = v.toDate();
+    } else if (v is DateTime) {
+      dt = v;
+    } else {
+      final s = v as String? ?? '';
+      dt = s.isNotEmpty ? DateTime.tryParse(s) : null;
+    }
+    if (dt == null) return '';
+    final now = DateTime.now();
+    final hm = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    if (day == today) return 'اليوم $hm';
+    if (day == today.subtract(const Duration(days: 1))) return 'أمس $hm';
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} $hm';
+  }
+
+  Future<void> _edit(BuildContext context) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final titleCtrl = TextEditingController(text: data['title'] as String? ?? '');
+    final summaryCtrl = TextEditingController(text: (data['summary'] as String? ?? data['content'] as String? ?? '').trim());
+    final sourceCtrl = TextEditingController(text: data['source'] as String? ?? '');
+    final catCtrl = TextEditingController(text: data['category'] as String? ?? '');
+    final urlCtrl = TextEditingController(text: (data['url'] as String? ?? data['link'] as String? ?? '').trim());
+    final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDState) => AlertDialog(
-          title: Text(doc != null ? 'تعديل خبر' : 'إضافة خبر'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
+      builder: (ctx) => AlertDialog(
+        title: const Text('تعديل الخبر'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'العنوان', border: OutlineInputBorder()), maxLines: 2),
+                const SizedBox(height: 12),
+                TextField(controller: summaryCtrl, decoration: const InputDecoration(labelText: 'الملخص', border: OutlineInputBorder()), maxLines: 4),
+                const SizedBox(height: 12),
+                TextField(controller: sourceCtrl, decoration: const InputDecoration(labelText: 'المصدر', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: catCtrl, decoration: const InputDecoration(labelText: 'التصنيف', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
+                TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'رابط المصدر', border: OutlineInputBorder())),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await doc.reference.update({
+                  'title': titleCtrl.text.trim(),
+                  'summary': summaryCtrl.text.trim(),
+                  'content': summaryCtrl.text.trim(),
+                  'description': summaryCtrl.text.trim(),
+                  'source': sourceCtrl.text.trim(),
+                  'category': catCtrl.text.trim(),
+                  'url': urlCtrl.text.trim(),
+                  'link': urlCtrl.text.trim(),
+                });
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              } catch (e) {
+                if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.black),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    if (saved == true && context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('تم حفظ التعديلات'), behavior: SnackBarBehavior.floating));
+    }
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف الخبر'),
+        content: const Text('سيتم مسح هذا الخبر نهائياً من Firestore. هل أنت متأكد؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف نهائياً'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await doc.reference.delete();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('تم حذف الخبر'), behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحذف: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final data = doc.data() as Map<String, dynamic>;
+    final title = data['title'] as String? ?? '';
+    final summary = (data['summary'] as String? ?? data['content'] as String? ?? '').trim();
+    final source = data['source'] as String? ?? '';
+    final category = data['category'] as String? ?? '';
+    final dateLabel = _fmtDate(data['date'] ?? data['createdAt'] ?? data['publishedAt']);
+    final subtitle = [
+      if (source.isNotEmpty) source,
+      if (category.isNotEmpty) category,
+      if (dateLabel.isNotEmpty) dateLabel,
+    ].join(' • ');
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (imageBase64 != null)
-                    Container(
-                      height: 100, width: double.infinity,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(10),
-                        image: DecorationImage(image: MemoryImage(base64Decode(imageBase64!.split(',').last)), fit: BoxFit.cover),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final b64 = await pickImageAsBase64();
-                      if (b64 != null) { imageBase64 = b64; setDState(() {}); }
-                    },
-                    icon: const Icon(Icons.image, size: 18),
-                    label: Text(imageBase64 != null ? 'تغيير الصورة' : 'إضافة صورة'),
-                  ),
-                  TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'عنوان الخبر', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(controller: contentCtrl, decoration: const InputDecoration(labelText: 'نص الخبر', border: OutlineInputBorder()), maxLines: 4),
-                  const SizedBox(height: 12),
-                  TextField(controller: sourceCtrl, decoration: const InputDecoration(labelText: 'المصدر', border: OutlineInputBorder())),
-                  const SizedBox(height: 12),
-                  TextField(controller: urlCtrl, decoration: const InputDecoration(labelText: 'رابط المصدر (اختياري)', border: OutlineInputBorder())),
+                  Text(title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w600, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: section.color)),
+                  ],
+                  if (summary.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+                  ],
                 ],
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final map = <String, dynamic>{
-                    'title': titleCtrl.text, 'content': contentCtrl.text, 'source': sourceCtrl.text,
-                    'url': urlCtrl.text, 'date': DateTime.now(), 'views': data?['views'] ?? 0,
-                  };
-                  if (imageBase64 != null) map['imageBase64'] = imageBase64;
-                  if (doc != null) {
-                    await doc.reference.update(map);
-                  } else {
-                    await FirebaseFirestore.instance.collection('news').add(map);
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                } catch (e) {
-                  if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.black),
-              child: Text(doc != null ? 'حفظ' : 'إضافة'),
-            ),
+            const SizedBox(width: 8),
+            IconButton(tooltip: 'تعديل', icon: const Icon(Icons.edit, size: 18), onPressed: () => _edit(context)),
+            IconButton(tooltip: 'حذف', icon: Icon(Icons.delete, size: 18, color: Colors.red), onPressed: () => _delete(context)),
           ],
         ),
       ),
