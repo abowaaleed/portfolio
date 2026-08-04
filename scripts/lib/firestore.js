@@ -28,11 +28,12 @@ export function toTimestamp(d) {
 
 export function buildDoc(it, preview = false) {
   const fallbackContent = stripHtml(it.description || '').slice(0, 300) || it.title || '';
-  const summary = it.summary || it.content || fallbackContent;
+  const summary = it.summary || (it.content ? it.content.split('\n')[0].slice(0, 200) : '') || fallbackContent;
+  const content = it.content || it.summary || fallbackContent;
   const base = {
     title: it.title || '',
     summary,
-    content: summary,
+    content,
     description: summary,
     source: it.source || '',
     category: it.category || 'تقنية عامة',

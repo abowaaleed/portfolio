@@ -193,6 +193,15 @@ class _NewsCard extends StatelessWidget {
     }
   }
 
+  Future<void> _openDetail(BuildContext context) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => NewsDetailSheet(data: data, isDark: isDark),
+    );
+  }
+
   Future<void> _copySummary(BuildContext context) async {
     final text = _summary.isNotEmpty ? _summary : (data['title'] as String? ?? '');
     await Clipboard.setData(ClipboardData(text: text));
@@ -239,7 +248,7 @@ class _NewsCard extends StatelessWidget {
     final dateLabel = _formatDate();
 
     return GestureDetector(
-      onTap: () => _openSource(context),
+      onTap: () => _openDetail(context),
       child: Container(
         width: 290,
         clipBehavior: Clip.antiAlias,
@@ -295,6 +304,8 @@ class _NewsCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       data['title'] as String? ?? '',
+                      textAlign: TextAlign.right,
+                      textDirection: TextDirection.rtl,
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, height: 1.3, color: isDark ? Colors.white : AppColors.lightTextPrimary),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -304,6 +315,8 @@ class _NewsCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           _summary,
+                          textAlign: TextAlign.right,
+                          textDirection: TextDirection.rtl,
                           style: TextStyle(fontSize: 11, height: 1.4, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

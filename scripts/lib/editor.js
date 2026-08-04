@@ -116,10 +116,12 @@ function buildPrompt(items, label, { mode, categories }) {
     : `قَبول إذا كان من النوع التقني الثقيل والجاذب للقارئ العربي مثل: إطلاق هواتف وأجهزة جديدة، مؤتمرات وإعلانات الشركات الكبرى (Apple / Google / Samsung / Microsoft)، تسريبات الأجهزة القادمة، تطورات وتحديثات الذكاء الاصطناعي، استحواذات وصفقات الشركات، أخبار السيارات الذكية والكهربائية (Tesla / Lucid). رفض فوراً إذا كان: مقال رأي شخصي، دليل شراء أو تسوق، مراجعة جهاز بسيط (مروحة، قبعة، ملحق رخيص)، محتوى عام أو ترفيهي، محتوى موسمي (عروض، هدايا، نصائح شراء)، أو خبراً ضعيفاً لا قيمة حقيقية له.`;
 
   const craft = isTrends
-    ? `- أعد صياغة اسم الترند بالعربية بأسلوب صحفي مشوق وجذاب (لا يتجاوز 80 حرفاً).
-- اكتب ملخصاً من 3 إلى 4 أسطر يشرح "لماذا يتصدر هذا الموضوع": قصته، سير أحداثه، ولماذا يهتم به الناس، غنياً بالمعلومات الحقيقية من المقطع الإخباري المرافق (traffic تشير لعدد عمليات البحث).`
+    ? `- أعد صياغة اسم الترند بالعربية بأسلوب صحفي مشوق وجذاب (لا يتجاوز 90 حرفاً).
+- summary: ملخص من سطرين إلى ثلاثة أسطر يشرح "لماذا يتصدر هذا الموضوع" باختصار.
+- content: مقال كامل دسم من 300 إلى 450 كلمة يشرح قصة الموضوع بالتفصيل: خلفيته، تسلسل أحداثه، الأرقام والبيانات الحقيقية من المقطع الإخباري المرافق، وتأثيره على الناس. اكتبه في فقرات من 3 إلى 5 فقرات كاملة التكوين، لا سطور مقتضبة، بحيث يجد القارئ كل ما يحتاجه لفهم الخبر دون الرجوع للمصدر.`
     : `- أعد صياغة العنوان بالعربية بأسلوب صحفي مشوق وجذاب يحفز القراءة، دقيق وغير مبالغ، ولا يتجاوز 90 حرفاً. مثال: بدلاً من "تحديث تطبيق" اكتب "جوجل تطلق تحديثاً ثورياً لتطبيقاتها.. إليك أبرز الميزات".
-- اكتب ملخصاً من 3 إلى 4 أسطر غنياً بالمعلومات الحقيقية المستخرجة من النص (المواصفات، الأسعار، التواريخ، التفاصيل المعلنة) بحيث يكتفي القارئ بفتح البطاقة ليعرف الجوهر.`;
+- summary: ملخص من سطرين إلى ثلاثة أسطر غني بالمعلومات الحقيقية المستخرجة من النص (المواصفات، الأسعار، التواريخ، التفاصيل المعلنة).
+- content: مقال كامل دسم من 300 إلى 450 كلمة يشرح الخبر بالتفصيل للقارئ العربي: بداية القصة وخلفيتها، ما أُعلن بالضبط (مواصفات، أسعار، تواريخ، أرقام)، ولماذا يهم هذا الخبر للقارئ وكيف سيؤثر عليه. اكتبه في فقرات من 3 إلى 5 فقرات كاملة ومترابطة (فقرات طويلة تفصيلية وليست سطوراً مقتضبة) بحيث يفهم القارئ الخبر فهماً كاملاً من المقال وحده دون الحاجة للمصدر.`;
 
   return `أنت "مدير تحرير" في منصة عربية تقنية احترافية. ستستلم محتوى خام من مصدر: "${label}". عناوينه ومحتواه قد تكون بالإنجليزية أو العربية.
 
@@ -133,10 +135,10 @@ ${craft}
 
 قواعد صارمة:
 1. كل المخرجات بالعربية حصراً؛ أسماء العلم والشركات والمنتجات الأجنبية (OpenAI، Apple، iPhone، Tesla) تبقى بحروفها اللاتينية.
-2. لا تختلق معلومات غير موجودة في النص الأصلي إطلاقاً.
+2. لا تختلق معلومات غير موجودة في النص الأصلي إطلاقاً، ويمكنك التوسع بشرح وتوضيح ما ورد فقط.
 3. أعد JSON على شكل مصفوفة بنفس عدد المدخلات وبنفس المعرفات id، لكل عنصر بالصيغة:
-{"id":0,"publish":true,"reason":"سبب موجز للقبول أو الرفض","title":"العنوان العربي","summary":"سطر1\\nسطر2\\nسطر3","category":"${isTrends ? 'ترند' : 'أجهزة'}"}
-- للمرفوض: publish=false و reason يوضح السبب، واترك title و summary فارغين.
+{"id":0,"publish":true,"reason":"سبب موجز للقبول أو الرفض","title":"العنوان العربي","summary":"ملخص قصير سطر إلى سطرين","content":"المقال الكامل في فقرات\\n\\nالفقرة الثانية\\n\\nالفقرة الثالثة","category":"${isTrends ? 'ترند' : 'أجهزة'}"}
+- للمرفوض: publish=false و reason يوضح السبب، واترك title و summary و content فارغين.
 - التصنيف category من القائمة حصراً: ${catList}
 - إن كان عدد المقبولين قليلاً فاكتفِ بهم ولا تحاول حشو الصفحة بمحتوى ضعيف.
 
@@ -219,11 +221,19 @@ export async function editBatch(items, label, { mode = 'news', categories = TECH
       continue;
     }
     const title = hasArabic(g.title || '') ? g.title : '';
-    const content = hasArabic(g.summary || '') ? g.summary : '';
+    const summary = hasArabic(g.summary || '') ? g.summary : '';
+    const fullContent = hasArabic(g.content || '') ? g.content : '';
     let fallback = null;
-    if (!title || !content) fallback = await arabicFallback(it);
+    if (!title || (!summary && !fullContent)) fallback = await arabicFallback(it);
     const finalTitle = title || (fallback && fallback.title) || it.title;
-    const finalContent = content || (fallback && fallback.summary) || stripHtml(it.description || '').slice(0, 300);
+    const finalSummary = summary
+      || (fullContent ? fullContent.split('\n')[0].slice(0, 200) : '')
+      || (fallback && fallback.summary)
+      || stripHtml(it.description || '').slice(0, 300);
+    const finalContent = fullContent
+      || summary
+      || (fallback && fallback.summary)
+      || stripHtml(it.description || '').slice(0, 300);
     if (!hasArabic(finalTitle)) {
       log(`تخطي (عنوان غير عربي بعد الترجمة): ${String(it.title).slice(0, 60)}`);
       continue;
@@ -231,7 +241,7 @@ export async function editBatch(items, label, { mode = 'news', categories = TECH
     accepted.push({
       ...it,
       title: finalTitle,
-      summary: finalContent,
+      summary: finalSummary,
       content: finalContent,
       category: categories.includes(g.category) ? g.category : categories[0],
       reason: g.reason || '',

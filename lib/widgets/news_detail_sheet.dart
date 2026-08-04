@@ -26,7 +26,9 @@ class NewsDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final imgBase64 = data['imageBase64'] as String?;
     final imgUrl = data['imageUrl'] as String?;
-    final content = (data['summary'] as String? ?? data['content'] as String? ?? data['description'] as String? ?? '').trim();
+    final content = (data['content'] as String? ?? '').trim().isNotEmpty
+        ? (data['content'] as String).trim()
+        : (data['summary'] as String? ?? data['description'] as String? ?? '').trim();
     final sourceUrl = (data['url'] as String? ?? data['link'] as String? ?? '').trim();
     final category = (data['category'] as String? ?? '').trim();
     final traffic = (data['approxTraffic'] as String? ?? '').trim();
@@ -93,22 +95,26 @@ class NewsDetailSheet extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               data['title'] as String? ?? '',
+              textAlign: TextAlign.right,
+              textDirection: TextDirection.rtl,
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                height: 1.4,
+                height: 1.5,
                 color: isDark ? Colors.white : AppColors.lightTextPrimary,
               ),
             ),
             if ((data['source'] as String? ?? '').isNotEmpty) ...[
               const SizedBox(height: 6),
-              Text(data['source'] as String? ?? '', style: TextStyle(fontSize: 12, color: AppColors.accent)),
+              Text(data['source'] as String? ?? '', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, color: AppColors.accent)),
             ],
             if (content.isNotEmpty) ...[
               const SizedBox(height: 14),
               Text(
                 content,
-                style: TextStyle(fontSize: 14, height: 1.8, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+                textAlign: TextAlign.right,
+                textDirection: TextDirection.rtl,
+                style: TextStyle(fontSize: 15, height: 1.9, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
               ),
             ],
             if (reason.isNotEmpty) ...[
@@ -128,7 +134,9 @@ class NewsDetailSheet extends StatelessWidget {
                     Expanded(
                       child: Text(
                         reason,
-                        style: TextStyle(fontSize: 12, height: 1.6, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
+                        textAlign: TextAlign.right,
+                        textDirection: TextDirection.rtl,
+                        style: TextStyle(fontSize: 12, height: 1.7, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary),
                       ),
                     ),
                   ],
