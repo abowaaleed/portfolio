@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import 'site_text.dart';
 
 class SocialSection extends StatelessWidget {
   const SocialSection({super.key});
@@ -14,7 +15,7 @@ class SocialSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(title: 'تواصل معي', subtitle: 'على منصات التواصل'),
+          _SectionHeader(titleField: 'socialTitle', title: 'تواصل معي', subtitleField: 'socialSubtitle', subtitle: 'على منصات التواصل'),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('social_links').orderBy('order').snapshots(),
@@ -108,9 +109,11 @@ class _SocialCard extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
+  final String titleField;
   final String title;
+  final String subtitleField;
   final String subtitle;
-  const _SectionHeader({required this.title, required this.subtitle});
+  const _SectionHeader({required this.titleField, required this.title, required this.subtitleField, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -118,9 +121,9 @@ class _SectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+        SiteText(titleField, fallback: title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
         const SizedBox(height: 2),
-        Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        SiteText(subtitleField, fallback: subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
         const SizedBox(height: 10),
         Container(width: 50, height: 3, decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(2),

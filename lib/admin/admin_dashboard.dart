@@ -7,6 +7,7 @@ import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../services/firestore_service.dart';
 import '../services/image_picker_web.dart';
+import '../widgets/site_text.dart';
 import 'admin_login.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -84,6 +85,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 NavigationRailDestination(icon: Icon(Icons.share), label: Text('التواصل')),
                 NavigationRailDestination(icon: Icon(Icons.feedback), label: Text('التعليقات')),
                 NavigationRailDestination(icon: Icon(Icons.palette), label: Text('الملف الشخصي')),
+                NavigationRailDestination(icon: Icon(Icons.text_fields), label: Text('نصوص الموقع')),
               ],
             ),
           Expanded(
@@ -96,6 +98,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               const _SocialTab(),
               const _FeedbackTab(),
               const _ProfileTab(),
+              const _SiteTextsTab(),
             ][_tab],
           ),
         ],
@@ -114,6 +117,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 BottomNavigationBarItem(icon: Icon(Icons.share), label: 'تواصل'),
                 BottomNavigationBarItem(icon: Icon(Icons.feedback), label: 'تعليقات'),
                 BottomNavigationBarItem(icon: Icon(Icons.palette), label: 'ملفي'),
+                BottomNavigationBarItem(icon: Icon(Icons.text_fields), label: 'نصوص'),
               ],
             )
           : null,
@@ -1077,6 +1081,138 @@ class _FeedbackTab extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _SiteTextsTab extends StatefulWidget {
+  const _SiteTextsTab();
+  @override
+  State<_SiteTextsTab> createState() => _SiteTextsTabState();
+}
+
+class _SiteTextsTabState extends State<_SiteTextsTab> {
+  final _docRef = FirebaseFirestore.instance.collection('settings').doc('site_texts');
+  final Map<String, TextEditingController> _controllers = {};
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final snap = await _docRef.get();
+      final data = snap.data() ?? {};
+      for (final def in siteTextFieldDefs) {
+        final v = data[def.key];
+        _controllers[def.key] = TextEditingController(
+          text: (v is String && v.trim().isNotEmpty) ? v : def.fallback,
+        );
+      }
+    } catch (_) {
+      for (final def in siteTextFieldDefs) {
+        _controllers[def.key] = TextEditingController(text: def.fallback);
+      }
+    }
+    if (mounted) setState(() => _loaded = true);
+  }
+
+  Future<void> _save() async {
+    try {
+      final map = <String, dynamic>{
+        for (final def in siteTextFieldDefs) def.key: _controllers[def.key]!.text.trim(),
+      };
+      await _docRef.set(map, SetOptions(merge: true));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('تم حفظ نصوص الصفحة الرئيسية'), behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الحفظ: $e')));
+    }
+  }
+
+  Future<void> _reset() async {
+    try {
+      final map = <String, dynamic>{
+        for (final def in siteTextFieldDefs) def.key: def.fallback,
+      };
+      await _docRef.set(map, SetOptions(merge: true));
+      for (final def in siteTextFieldDefs) {
+        _controllers[def.key]?.text = def.fallback;
+      }
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('تمت استعادة النصوص الافتراضية'), behavior: SnackBarBehavior.floating));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطأ في الاستعادة: $e')));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (!_loaded) return const Center(child: CircularProgressIndicator());
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Text('نصوص الصفحة الرئيسية', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: _reset,
+              icon: const Icon(Icons.restore, size: 16),
+              label: const Text('استعادة الافتراضي'),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save, size: 16),
+              label: const Text('حفظ الكل'),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, foregroundColor: Colors.black),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text('عدّل أي نص يظهر في الصفحة الرئيسية وسيتم الحفظ مباشرة في Firestore.',
+            style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final def in siteTextFieldDefs) ...[
+                  TextField(
+                    controller: _controllers[def.key],
+                    maxLines: def.multiline ? 3 : 1,
+                    decoration: InputDecoration(labelText: def.label, border: const OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

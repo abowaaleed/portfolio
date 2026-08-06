@@ -17,6 +17,7 @@ import 'widgets/blog_section.dart';
 import 'widgets/social_section.dart';
 import 'widgets/feedback_section.dart';
 import 'widgets/footer.dart';
+import 'widgets/site_text.dart';
 import 'admin/admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -281,7 +282,7 @@ class _SuggestionsCarouselState extends State<_SuggestionsCarousel> {
                   children: [
                     Icon(Icons.explore, size: 13, color: AppColors.accent),
                     const SizedBox(width: 4),
-                    Text('مقترحة لك', style: TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w600)),
+                    SiteText('suggestionsLabel', fallback: 'مقترحة لك', style: TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),

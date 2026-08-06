@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../services/firestore_service.dart';
+import 'site_text.dart';
 
 class FeedbackSection extends StatefulWidget {
   const FeedbackSection({super.key});
@@ -58,7 +59,7 @@ class _FeedbackSectionState extends State<FeedbackSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionHeader(title: 'رأيك يهمني', subtitle: 'شاركني باقتراح أو تعليق'),
+          _SectionHeader(titleField: 'feedbackTitle', title: 'رأيك يهمني', subtitleField: 'feedbackSubtitle', subtitle: 'شاركني باقتراح أو تعليق'),
           const SizedBox(height: 16),
           Card(
             margin: EdgeInsets.zero,
@@ -67,7 +68,7 @@ class _FeedbackSectionState extends State<FeedbackSection> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('ما رأيك في الموقع؟', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+                  SiteText('feedbackCardTitle', fallback: 'ما رأيك في الموقع؟', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _nameCtrl,
@@ -132,9 +133,11 @@ class _FeedbackSectionState extends State<FeedbackSection> {
 }
 
 class _SectionHeader extends StatelessWidget {
+  final String titleField;
   final String title;
+  final String subtitleField;
   final String subtitle;
-  const _SectionHeader({required this.title, required this.subtitle});
+  const _SectionHeader({required this.titleField, required this.title, required this.subtitleField, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -142,9 +145,9 @@ class _SectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+        SiteText(titleField, fallback: title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
         const SizedBox(height: 2),
-        Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        SiteText(subtitleField, fallback: subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
         const SizedBox(height: 10),
         Container(width: 50, height: 3, decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(2),

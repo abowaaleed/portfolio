@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import 'news_detail_sheet.dart';
+import 'site_text.dart';
 
 class NewsSection extends StatelessWidget {
   const NewsSection({super.key});
@@ -56,7 +57,7 @@ class NewsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _SectionHeader(title: 'الأخبار والترندات', subtitle: 'تقنية • محلية • ترندات • عالمي'),
+          const _SectionHeader(titleField: 'newsTitle', title: 'الأخبار والترندات', subtitleField: 'newsSubtitle', subtitle: 'تقنية • محلية • ترندات • عالمي'),
           const SizedBox(height: 20),
           ..._sections.map(
             (s) => Padding(
@@ -384,9 +385,11 @@ class _NewsCard extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
+  final String titleField;
   final String title;
+  final String subtitleField;
   final String subtitle;
-  const _SectionHeader({required this.title, required this.subtitle});
+  const _SectionHeader({required this.titleField, required this.title, required this.subtitleField, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -396,9 +399,9 @@ class _SectionHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+            SiteText(titleField, fallback: title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
             const SizedBox(height: 2),
-            Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+            SiteText(subtitleField, fallback: subtitle, style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
           ],
         ),
         const Spacer(),

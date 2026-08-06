@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'site_text.dart';
 
 class FooterSection extends StatelessWidget {
   const FooterSection({super.key});
@@ -20,11 +21,11 @@ class FooterSection extends StatelessWidget {
             children: [
               Icon(Icons.code, color: AppColors.accent, size: 18),
               const SizedBox(width: 6),
-              Text('صالح الحودي', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+              SiteText('footerName', fallback: 'صالح الحودي', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
             ],
           ),
           const SizedBox(height: 6),
-          Text('© 2026 Saleh Alhoodi. جميع الحقوق محفوظة.', style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+          SiteText('footerCopyright', fallback: '© 2026 Saleh Alhoodi. جميع الحقوق محفوظة.', style: TextStyle(fontSize: 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
           const SizedBox(height: 4),
           Text('${AppInfo.version} — Flutter Web', style: TextStyle(fontSize: 11, color: AppColors.accent, fontFamily: 'monospace')),
         ],

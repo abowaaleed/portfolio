@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
+import 'site_text.dart';
 
 class NavBar extends StatefulWidget {
   final void Function(int index)? onSectionTap;
@@ -20,6 +21,7 @@ class _NavBarState extends State<NavBar> {
   bool _isMobileOpen = false;
 
   static const sections = ['الرئيسية', 'تطبيقاتي', 'الشروحات', 'أخبار', 'المدونة', 'تواصل'];
+  static const sectionFields = ['navHome', 'navApps', 'navTutorials', 'navNews', 'navBlog', 'navContact'];
 
   @override
   void initState() {
@@ -70,13 +72,13 @@ class _NavBarState extends State<NavBar> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('صالح الحودي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
-                  Text('موقع صالح الحودي', style: TextStyle(fontSize: 10, color: AppColors.accent, fontFamily: 'monospace')),
+                  SiteText('navSiteName', fallback: 'صالح الحودي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isDark ? Colors.white : AppColors.lightTextPrimary)),
+                  SiteText('navTagline', fallback: 'موقع صالح الحودي', style: TextStyle(fontSize: 10, color: AppColors.accent, fontFamily: 'monospace')),
                 ],
               ),
               const Spacer(),
               if (MediaQuery.of(context).size.width > 768)
-                ...List.generate(sections.length, (i) => _NavItem(label: sections[i], isDark: isDark, onTap: () => _scrollTo(i))),
+                ...List.generate(sections.length, (i) => _NavItem(label: sections[i], field: sectionFields[i], isDark: isDark, onTap: () => _scrollTo(i))),
               _ThemeToggle(isDark: isDark),
               if (MediaQuery.of(context).size.width <= 768)
                 IconButton(
@@ -191,10 +193,11 @@ class _SocialBadge extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   final String label;
+  final String field;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _NavItem({required this.label, required this.isDark, required this.onTap});
+  const _NavItem({required this.label, required this.field, required this.isDark, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -202,7 +205,7 @@ class _NavItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: TextButton(
         onPressed: onTap,
-        child: Text(label, style: TextStyle(fontSize: 13, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
+        child: SiteText(field, fallback: label, style: TextStyle(fontSize: 13, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary)),
       ),
     );
   }

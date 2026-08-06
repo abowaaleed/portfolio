@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
+import 'site_text.dart';
 
 class HeroSection extends StatelessWidget {
   final ScrollController scrollController;
@@ -41,14 +42,15 @@ class HeroSection extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text('صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 40 : 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : AppColors.lightTextPrimary, height: 1.2)),
+                    SiteText('heroName', fallback: 'صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 40 : 28, fontWeight: FontWeight.w900, color: isDark ? Colors.white : AppColors.lightTextPrimary, height: 1.2)),
                     const SizedBox(height: 4),
-                    Text('Saleh Alhoodi — موقع صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 18 : 13, color: AppColors.accent, fontFamily: 'monospace', letterSpacing: 1)),
+                    SiteText('heroSubtitle', fallback: 'Saleh Alhoodi — موقع صالح الحودي', style: TextStyle(fontSize: size.width > 600 ? 18 : 13, color: AppColors.accent, fontFamily: 'monospace', letterSpacing: 1)),
                     const SizedBox(height: 12),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 32),
-                      child: Text(
-                        'مطوّر تطبيقات وأنظمة • شغوف بالتقنية والتراث السعودي',
+                      child: SiteText(
+                        'heroDescription',
+                        fallback: 'مطوّر تطبيقات وأنظمة • شغوف بالتقنية والتراث السعودي',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: size.width > 600 ? 14 : 12, color: isDark ? AppColors.textSecondary : AppColors.lightTextSecondary, height: 1.4),
                       ),
@@ -57,9 +59,9 @@ class HeroSection extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        _HeroButton(label: 'تطبيقاتي', icon: Icons.apps, onTap: () => scrollController.animateTo(500, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: true),
+                        _HeroButton(label: 'تطبيقاتي', field: 'heroAppsButton', icon: Icons.apps, onTap: () => scrollController.animateTo(500, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: true),
                         const SizedBox(width: 12),
-                        _HeroButton(label: 'تواصل', icon: Icons.chat_bubble_outline, onTap: () => scrollController.animateTo(2100, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: false),
+                        _HeroButton(label: 'تواصل', field: 'heroContactButton', icon: Icons.chat_bubble_outline, onTap: () => scrollController.animateTo(2100, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut), isPrimary: false),
                       ],
                     ),
                   ],
@@ -75,11 +77,12 @@ class HeroSection extends StatelessWidget {
 
 class _HeroButton extends StatelessWidget {
   final String label;
+  final String field;
   final IconData icon;
   final VoidCallback onTap;
   final bool isPrimary;
 
-  const _HeroButton({required this.label, required this.icon, required this.onTap, required this.isPrimary});
+  const _HeroButton({required this.label, required this.field, required this.icon, required this.onTap, required this.isPrimary});
 
   @override
   Widget build(BuildContext context) {
@@ -87,7 +90,7 @@ class _HeroButton extends StatelessWidget {
     return ElevatedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 13)),
+      label: SiteText(field, fallback: label, style: const TextStyle(fontSize: 13)),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         backgroundColor: isPrimary ? AppColors.accent : (isDark ? AppColors.darkCard : const Color(0xFFE2E8F0)),
