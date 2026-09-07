@@ -3,71 +3,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // المجموعات العامة القابلة للقراءة للجميع (الموقع العام)
-    function isPublicRead() {
-      return request.auth != null || true;
+    // حساب المسؤول الوحيد المسموح له بالكتابة في المحتوى
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'abo.waaleed@gmail.com';
     }
 
-    // الملف العام للموقع
+    // القراءة العامة للموقع
     match /settings/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid != null;
+      allow write: if isAdmin();
     }
 
-    // التطبيقات والشروحات والمدونة وروابط التواصل والأخبار
     match /apps/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /tutorials/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /blog/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /social_links/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /tech_news/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /saudi_news/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /google_trends/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /twitter_trends/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     match /global_news/{doc=**} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
-    // التعليقات: أي شخص يمكنه إضافة، والمسؤول فقط يقرأ/يوافق/يحذف
+    // التعليقات: أي شخص يستطيع إرسال، admin فقط يقرأ/يوافق/يحذف
     match /feedback/{doc=**} {
       allow create: if true;
-      allow read: if request.auth != null;
-      allow update, delete: if request.auth != null;
+      allow read, update, delete: if isAdmin();
     }
 
-    // الإحصائيات: للقراءة العامة والكتابة بدون مصادقة (عداد الزيارات)
+    // عداد الزيارات: قراءة عامة + كتابة عامة (تتزايد تلقائياً)
     match /analytics/{doc=**} {
       allow read: if true;
       allow write: if true;
