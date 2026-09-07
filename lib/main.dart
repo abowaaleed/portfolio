@@ -161,7 +161,20 @@ class _PortfolioPageState extends State<PortfolioPage> {
         stream: FirebaseFirestore.instance.collection('settings').doc('profile').snapshots(),
         builder: (ctx, snap) {
           if (snap.hasError) {
-            return const Center(child: Text('خطأ في تحميل البيانات', style: TextStyle(color: Colors.redAccent)));
+            debugPrint('Firestore profile error: ${snap.error}');
+            return Scaffold(
+              backgroundColor: const Color(0xFF0A0A0F),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'خطأ في تحميل البيانات\n\n${snap.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                  ),
+                ),
+              ),
+            );
           }
           final data = snap.data?.data() as Map<String, dynamic>?;
           final bgB64 = data?['backgroundImageBase64'] as String?;
