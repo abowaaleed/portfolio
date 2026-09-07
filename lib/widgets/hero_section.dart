@@ -17,7 +17,19 @@ class HeroSection extends StatelessWidget {
       stream: FirebaseFirestore.instance.collection('settings').doc('profile').snapshots(),
       builder: (ctx, snap) {
         if (snap.hasError) {
-          return const SizedBox(height: 300, child: Center(child: Text('خطأ في تحميل البيانات', style: TextStyle(color: Colors.redAccent))));
+          return SizedBox(
+            height: 300,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'خطأ في تحميل البيانات\n\n${snap.error}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
+              ),
+            ),
+          );
         }
         final data = snap.data?.data() as Map<String, dynamic>?;
         final profImg = data?['profileImageBase64'] as String?;
