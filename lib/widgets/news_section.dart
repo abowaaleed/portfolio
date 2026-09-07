@@ -125,6 +125,16 @@ class _NewsStream extends StatelessWidget {
               stream: FirebaseFirestore.instance.collection(section.collection).snapshots(),
               builder: (ctx, snap) {
                 final n = snap.data?.docs.length ?? 0;
+                if (snap.hasError) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: isDark ? 0.25 : 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('خطأ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.redAccent)),
+                  );
+                }
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -141,11 +151,22 @@ class _NewsStream extends StatelessWidget {
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection(section.collection)
-              .orderBy('date', descending: true)
-              .limit(10)
               .snapshots(),
           builder: (ctx, snap) {
-            final docs = snap.data?.docs ?? [];
+            var docs = [...?snap.data?.docs];
+            docs.sort((a, b) {
+              final am = a.data() as Map<String, dynamic>;
+              final bm = b.data() as Map<String, dynamic>;
+              final da = am['date'];
+              final db = bm['date'];
+              final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+              final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+              return bd.compareTo(ad);
+            });
+            docs = docs.length > 10 ? docs.sublist(0, 10) : docs;
+            if (snap.hasError) {
+              return const SizedBox(height: 170, child: Center(child: Text('خطأ في تحميل الأخبار', style: TextStyle(color: Colors.redAccent, fontSize: 13))));
+            }
             if (!snap.hasData) {
               return const SizedBox(height: 170, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
             }

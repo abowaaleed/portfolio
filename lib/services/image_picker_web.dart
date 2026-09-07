@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:typed_data';
-import 'dart:math' as math;
 
 Future<String?> pickImageAsBase64({int maxWidth = 600}) async {
   try {

@@ -13,9 +13,14 @@ class AppsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('apps').orderBy('isPinned', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('apps').snapshots(),
       builder: (ctx, snap) {
-        final apps = snap.data?.docs ?? [];
+        final apps = [...?snap.data?.docs];
+        apps.sort((a, b) {
+          final pa = (a.data() as Map<String, dynamic>)['isPinned'] as bool? ?? false;
+          final pb = (b.data() as Map<String, dynamic>)['isPinned'] as bool? ?? false;
+          return (pb ? 1 : 0).compareTo(pa ? 1 : 0);
+        });
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
           child: Column(
@@ -23,13 +28,15 @@ class AppsSection extends StatelessWidget {
             children: [
               _SectionHeader(titleField: 'appsTitle', title: 'تطبيقاتي', subtitleField: 'appsSubtitle', subtitle: 'تطبيقات وأدوات طورتها'),
               const SizedBox(height: 16),
+              if (snap.hasError)
+                const SizedBox(height: 60, child: Center(child: Text('خطأ في تحميل التطبيقات', style: TextStyle(color: Colors.redAccent, fontSize: 13)))),
               if (!snap.hasData)
                 const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
               else if (apps.isEmpty)
                 _EmptyPlaceholder(icon: Icons.apps, text: 'لا توجد تطبيقات بعد')
               else
                 Wrap(spacing: 12, runSpacing: 12,
-                  children: apps.map((doc) => _AppCard(data: doc.data() as Map<String, dynamic>, isDark: isDark)).toList(),
+                  children: apps.map((doc) => _AppCard(data: doc.data() as Map<String, dynamic>, docId: doc.id, isDark: isDark)).toList(),
                 ),
             ],
           ),
@@ -41,8 +48,9 @@ class AppsSection extends StatelessWidget {
 
 class _AppCard extends StatelessWidget {
   final Map<String, dynamic> data;
+  final String docId;
   final bool isDark;
-  const _AppCard({required this.data, required this.isDark});
+  const _AppCard({required this.data, required this.docId, required this.isDark});
 
   Widget _AppIcon({required Map<String, dynamic> data}) {
     final img = data['imageBase64'] as String?;
@@ -94,8 +102,7 @@ class _AppCard extends StatelessWidget {
                         final url = data['url'] as String? ?? '';
                         if (url.isNotEmpty && await canLaunchUrl(Uri.parse(url))) {
                           await launchUrl(Uri.parse(url));
-                          final id = data['id'] as String?;
-                          if (id != null) FirestoreService.incrementAppClick(id).catchError((_) {});
+                          FirestoreService.incrementAppClick(docId).catchError((_) {});
                         }
                       },
                       child: Text('فتح →', style: TextStyle(fontSize: 12, color: AppColors.accent, fontFamily: 'monospace')),

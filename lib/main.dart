@@ -160,6 +160,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('settings').doc('profile').snapshots(),
         builder: (ctx, snap) {
+          if (snap.hasError) {
+            return const Center(child: Text('خطأ في تحميل البيانات', style: TextStyle(color: Colors.redAccent)));
+          }
           final data = snap.data?.data() as Map<String, dynamic>?;
           final bgB64 = data?['backgroundImageBase64'] as String?;
           return Stack(
@@ -263,10 +266,16 @@ class _SuggestionsCarouselState extends State<_SuggestionsCarousel> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('apps').orderBy('isPinned', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('apps').snapshots(),
       builder: (ctx, snap) {
+        if (snap.hasError) return const SizedBox.shrink();
         _items = snap.data?.docs ?? [];
         if (!snap.hasData || _items.isEmpty) return const SizedBox.shrink();
+        _items.sort((a, b) {
+          final pa = (a.data() as Map<String, dynamic>)['isPinned'] as bool? ?? false;
+          final pb = (b.data() as Map<String, dynamic>)['isPinned'] as bool? ?? false;
+          return (pb ? 1 : 0).compareTo(pa ? 1 : 0);
+        });
         _startAutoScroll(_items.length);
         final data = _items[_current].data() as Map<String, dynamic>;
         final url = data['url'] as String? ?? '';

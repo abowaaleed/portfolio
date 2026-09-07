@@ -325,10 +325,17 @@ class _BlogTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection('blog').orderBy('date', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('blog').snapshots(),
       builder: (ctx, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final posts = snap.data!.docs;
+        final posts = [...snap.data!.docs];
+        posts.sort((a, b) {
+          final da = a.data()['date'];
+          final db = b.data()['date'];
+          final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+          return bd.compareTo(ad);
+        });
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -596,9 +603,18 @@ class _NewsSectionAdmin extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(section.collection).orderBy('date', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection(section.collection).snapshots(),
       builder: (ctx, snap) {
-        final docs = snap.data?.docs ?? [];
+        final docs = [...?snap.data?.docs];
+        docs.sort((a, b) {
+          final am = a.data() as Map<String, dynamic>;
+          final bm = b.data() as Map<String, dynamic>;
+          final da = am['date'];
+          final db = bm['date'];
+          final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+          return bd.compareTo(ad);
+        });
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1049,10 +1065,17 @@ class _FeedbackTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder(
-      stream: FirebaseFirestore.instance.collection('feedback').orderBy('date', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('feedback').snapshots(),
       builder: (ctx, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-        final feedbacks = snap.data!.docs;
+        final feedbacks = [...snap.data!.docs];
+        feedbacks.sort((a, b) {
+          final da = a.data()['date'];
+          final db = b.data()['date'];
+          final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+          return bd.compareTo(ad);
+        });
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [

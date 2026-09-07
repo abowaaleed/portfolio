@@ -14,6 +14,7 @@ class SiteText extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('settings').doc('site_texts').snapshots(),
       builder: (context, snap) {
+        if (snap.hasError) return Text(fallback, style: style, textAlign: textAlign);
         final data = snap.data?.data() as Map<String, dynamic>?;
         final value = data?[field];
         final text = (value is String && value.trim().isNotEmpty) ? value : fallback;

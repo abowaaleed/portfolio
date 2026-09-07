@@ -16,6 +16,9 @@ class HeroSection extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('settings').doc('profile').snapshots(),
       builder: (ctx, snap) {
+        if (snap.hasError) {
+          return const SizedBox(height: 300, child: Center(child: Text('خطأ في تحميل البيانات', style: TextStyle(color: Colors.redAccent))));
+        }
         final data = snap.data?.data() as Map<String, dynamic>?;
         final profImg = data?['profileImageBase64'] as String?;
         return Container(

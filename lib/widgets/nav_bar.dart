@@ -101,10 +101,11 @@ class _SocialBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('social_links').orderBy('order').snapshots(),
+      stream: FirebaseFirestore.instance.collection('social_links').snapshots(),
       builder: (ctx, snap) {
-        final items = snap.data?.docs ?? [];
-        if (!snap.hasData || items.isEmpty) return const SizedBox.shrink();
+        final items = [...?snap.data?.docs];
+        items.sort((a, b) => ((a.data() as Map<String, dynamic>)['order'] as num? ?? 0).compareTo(((b.data() as Map<String, dynamic>)['order'] as num? ?? 0)));
+        if (snap.hasError || !snap.hasData || items.isEmpty) return const SizedBox.shrink();
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: SingleChildScrollView(

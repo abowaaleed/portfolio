@@ -15,8 +15,14 @@ FirebaseFirestore get _db {
 
 class FirestoreService {
   static Future<List<AppItem>> getApps() async {
-    final snap = await _db.collection('apps').orderBy('isPinned', descending: true).get();
-    return snap.docs.map((d) => AppItem.fromMap({...d.data(), 'id': d.id})).toList();
+    final snap = await _db.collection('apps').get();
+    final docs = [...snap.docs];
+    docs.sort((a, b) {
+      final pa = (a.data())['isPinned'] as bool? ?? false;
+      final pb = (b.data())['isPinned'] as bool? ?? false;
+      return (pb ? 1 : 0).compareTo(pa ? 1 : 0);
+    });
+    return docs.map((d) => AppItem.fromMap({...d.data(), 'id': d.id})).toList();
   }
 
   static Future<void> addApp(AppItem app) async {
@@ -36,8 +42,16 @@ class FirestoreService {
   }
 
   static Future<List<BlogPost>> getBlogPosts() async {
-    final snap = await _db.collection('blog').orderBy('date', descending: true).get();
-    return snap.docs.map((d) {
+    final snap = await _db.collection('blog').get();
+    final docs = [...snap.docs];
+    docs.sort((a, b) {
+      final da = a.data()['date'];
+      final db = b.data()['date'];
+      final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return docs.map((d) {
       final data = d.data();
       return BlogPost(
         id: d.id,
@@ -102,8 +116,16 @@ class FirestoreService {
   }
 
   static Future<List<NewsItem>> getNews() async {
-    final snap = await _db.collection('news').orderBy('date', descending: true).get();
-    return snap.docs.map((d) {
+    final snap = await _db.collection('news').get();
+    final docs = [...snap.docs];
+    docs.sort((a, b) {
+      final da = a.data()['date'];
+      final db = b.data()['date'];
+      final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return docs.map((d) {
       final data = d.data();
       return NewsItem(
         id: d.id,
@@ -124,8 +146,16 @@ class FirestoreService {
   }
 
   static Future<List<FeedbackItem>> getFeedback() async {
-    final snap = await _db.collection('feedback').orderBy('date', descending: true).get();
-    return snap.docs.map((d) {
+    final snap = await _db.collection('feedback').get();
+    final docs = [...snap.docs];
+    docs.sort((a, b) {
+      final da = a.data()['date'];
+      final db = b.data()['date'];
+      final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+      final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+      return bd.compareTo(ad);
+    });
+    return docs.map((d) {
       final data = d.data();
       return FeedbackItem(
         id: d.id,
@@ -167,12 +197,21 @@ class FirestoreService {
 
   static Future<Map<String, int>> getAnalytics() async {
     try {
-      final snap = await _db.collection('analytics').orderBy('date', descending: true).limit(30).get();
+      final snap = await _db.collection('analytics').get();
+      final docs = [...snap.docs];
+      docs.sort((a, b) {
+        final da = a.data()['date'];
+        final db = b.data()['date'];
+        final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      });
+      final limited = docs.length > 30 ? docs.sublist(0, 30) : docs;
       int total = 0;
-      for (final d in snap.docs) {
+      for (final d in limited) {
         total += (d.data()['views'] as num?)?.toInt() ?? 0;
       }
-      return {'totalViews': total, 'daysCount': snap.docs.length};
+      return {'totalViews': total, 'daysCount': limited.length};
     } catch (_) {
       return {'totalViews': 0, 'daysCount': 0};
     }

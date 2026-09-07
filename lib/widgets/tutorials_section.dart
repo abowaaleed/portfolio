@@ -31,6 +31,8 @@ class _TutorialsSectionState extends State<TutorialsSection> {
             children: [
               _SectionHeader(titleField: 'tutorialsTitle', title: 'الشروحات', subtitleField: 'tutorialsSubtitle', subtitle: 'دروس تقنية'),
               const SizedBox(height: 12),
+              if (snap.hasError)
+                const SizedBox(height: 60, child: Center(child: Text('خطأ في تحميل الشروحات', style: TextStyle(color: Colors.redAccent, fontSize: 13)))),
               if (!snap.hasData)
                 const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
               else ...[

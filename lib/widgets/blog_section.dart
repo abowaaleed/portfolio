@@ -11,9 +11,16 @@ class BlogSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('blog').orderBy('date', descending: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('blog').snapshots(),
       builder: (ctx, snap) {
-        final posts = snap.data?.docs ?? [];
+        final posts = [...?snap.data?.docs];
+        posts.sort((a, b) {
+          final da = (a.data() as Map<String, dynamic>)['date'];
+          final db = (b.data() as Map<String, dynamic>)['date'];
+          final ad = da is Timestamp ? da.toDate() : da is DateTime ? da : DateTime.fromMillisecondsSinceEpoch(0);
+          final bd = db is Timestamp ? db.toDate() : db is DateTime ? db : DateTime.fromMillisecondsSinceEpoch(0);
+          return bd.compareTo(ad);
+        });
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
           child: Column(
@@ -21,6 +28,8 @@ class BlogSection extends StatelessWidget {
             children: [
               _SectionHeader(titleField: 'blogTitle', title: 'المدونة', subtitleField: 'blogSubtitle', subtitle: 'تدوينات البرمجة والتقنية'),
               const SizedBox(height: 16),
+              if (snap.hasError)
+                const SizedBox(height: 60, child: Center(child: Text('خطأ في تحميل المدونة', style: TextStyle(color: Colors.redAccent, fontSize: 13)))),
               if (!snap.hasData)
                 const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
               else if (posts.isEmpty)

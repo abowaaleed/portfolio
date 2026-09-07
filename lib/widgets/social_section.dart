@@ -18,9 +18,13 @@ class SocialSection extends StatelessWidget {
           _SectionHeader(titleField: 'socialTitle', title: 'تواصل معي', subtitleField: 'socialSubtitle', subtitle: 'على منصات التواصل'),
           const SizedBox(height: 16),
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('social_links').orderBy('order').snapshots(),
+            stream: FirebaseFirestore.instance.collection('social_links').snapshots(),
             builder: (ctx, snap) {
-              final items = snap.data?.docs ?? [];
+              final items = [...?snap.data?.docs];
+              items.sort((a, b) => ((a.data() as Map<String, dynamic>)['order'] as num? ?? 0).compareTo(((b.data() as Map<String, dynamic>)['order'] as num? ?? 0)));
+              if (snap.hasError) {
+                return const SizedBox(height: 60, child: Center(child: Text('خطأ في تحميل روابط التواصل', style: TextStyle(color: Colors.redAccent, fontSize: 13))));
+              }
               if (!snap.hasData) {
                 return const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
               }
